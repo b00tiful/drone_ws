@@ -1,0 +1,17 @@
+# Crazyflie and onboard RayCaster configuration for AeroStrike.
+
+robot:
+  env_prim_path: "{ENV_REGEX_NS}/Robot"
+  smoke_prim_path: "/World/Crazyflie"
+  spawn_position_m: [0.0, 0.0, 0.5]
+
+sensor:
+  prim_suffix: "body"
+  mesh_prim_paths: ["/World/defaultGroundPlane"]
+  ray_count: 24
+  min_range_m: 0.2
+  max_range_m: 10.0
+  horizontal_fov_degrees: [-150.0, 150.0]
+  vertical_fov_degrees: [-15.0, 15.0]
+  vertical_channels: 3
+  debug_vis: false

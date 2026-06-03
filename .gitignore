@@ -1,0 +1,22 @@
+# .gitignore
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+logs/**
+!logs/.gitkeep
+checkpoints/**
+!checkpoints/.gitkeep
+outputs/
+
+.env
+.agents/
+akasha/
+.codegraph/
+.codex/
+AGENTS.md
+.mcp.json
+opencode.jsonc
+implementation_plan.md

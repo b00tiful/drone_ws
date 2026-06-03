@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aerostrike-lab"
+version = "0.1.0"
+description = "Isaac Lab extension for AeroStrike drone navigation"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "gymnasium>=0.29.0",
+    "numpy>=1.24.0",
+    "PyYAML>=6.0",
+    "torch>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "ruff>=0.4.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aerostrike_lab*"]
+
+[tool.setuptools.package-data]
+"aerostrike_lab.tasks.navigation.agents" = ["*.yaml"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

@@ -7,9 +7,9 @@ connects goal positions to direction vectors.
 
 ## Current Phase
 
-- Week 1: base system
+- Week 3: goal integration
 - Primary stack: Isaac Sim 5.1.0, Isaac Lab 1.x, ROS 2 Humble, Python 3.11
-- Navigation MVP target: obstacle avoidance plus goal navigation at 3-5 m/s
+- Navigation MVP target: obstacle avoidance plus goal navigation at 3-5 m/s+
 
 ## Workspace
 

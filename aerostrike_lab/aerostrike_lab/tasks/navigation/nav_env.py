@@ -53,6 +53,7 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
                 "success",
                 "instability",
                 "action_smoothness",
+                "vertical_velocity",
                 "alive",
             ]
         }
@@ -65,11 +66,13 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         )
 
     def _setup_scene(self) -> None:
-        self._warehouse_layout = sample_warehouse_layout(
-            seed=self.cfg.warehouse_layout_seed,
-            root_prim_path=self.cfg.warehouse_root_prim_path,
-        )
-        spawn_warehouse_scene(self._warehouse_layout)
+        self._warehouse_layouts = []
+        for env_index in range(self.cfg.scene.num_envs):
+            seed = self._layout_seed_for_env(env_index)
+            root_prim_path = self._warehouse_root_for_env(env_index)
+            layout = sample_warehouse_layout(seed=seed, root_prim_path=root_prim_path)
+            self._warehouse_layouts.append(spawn_warehouse_scene(layout))
+        self._warehouse_layout = self._warehouse_layouts[0]
 
         self._robot = Articulation(self.cfg.robot)
         self.scene.articulations["robot"] = self._robot
@@ -84,10 +87,25 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/AmbientLight", light_cfg)
 
+    def _layout_seed_for_env(self, env_index: int) -> int:
+        seeds = tuple(self.cfg.warehouse_layout_seeds)
+        if len(seeds) == 0:
+            return int(self.cfg.warehouse_layout_seed)
+        return int(seeds[env_index % len(seeds)])
+
+    def _warehouse_root_for_env(self, env_index: int) -> str:
+        root = self.cfg.warehouse_root_prim_path.rstrip("/")
+        if "/env_0/" in root:
+            return root.replace("/env_0/", f"/env_{env_index}/", 1)
+        return f"/World/envs/env_{env_index}/Warehouse"
+
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         self._previous_actions = self._actions.clone()
         self._actions = actions.clone().clamp(-1.0, 1.0)
         self._desired_velocity_b = self._actions * self.cfg.action_velocity_limit_mps
+        self._desired_velocity_b[:, 2] = (
+            self._actions[:, 2] * self.cfg.action_vertical_velocity_limit_mps
+        )
         self._desired_velocity_w = quat_apply(self._robot.data.root_quat_w, self._desired_velocity_b)
 
     def _apply_action(self) -> None:
@@ -151,6 +169,7 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         angular_speed = torch.linalg.norm(self._robot.data.root_ang_vel_b, dim=1)
         instability = tilt_error + 0.1 * angular_speed
         action_smoothness = torch.linalg.norm(self._actions - self._previous_actions, dim=1)
+        vertical_speed = torch.abs(self._robot.data.root_lin_vel_w[:, 2])
 
         rewards = {
             "progress": self.cfg.progress_weight * progress,
@@ -160,6 +179,7 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
             "success": self.cfg.success_bonus * self._reached_goal.float(),
             "instability": -self.cfg.instability_penalty_weight * instability * self.step_dt,
             "action_smoothness": -self.cfg.action_smoothness_penalty_weight * action_smoothness * self.step_dt,
+            "vertical_velocity": -self.cfg.vertical_velocity_penalty_weight * vertical_speed * self.step_dt,
             "alive": -torch.full((self.num_envs,), self.cfg.alive_penalty * self.step_dt, device=self.device),
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
@@ -208,17 +228,28 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         self._desired_velocity_w[env_ids] = 0.0
         self._root_velocity_command_w[env_ids] = 0.0
 
-        start = torch.tensor(self._warehouse_layout.start_position, device=self.device, dtype=torch.float)
-        goal = torch.tensor(self._warehouse_layout.goal_position, device=self.device, dtype=torch.float)
-        start = start.clone()
-        goal = goal.clone()
-        start[2] = self.cfg.start_height_m
-        goal[2] = self.cfg.goal_height_m
-
         root_state = self._robot.data.default_root_state[env_ids].clone()
-        root_state[:, :3] = self.scene.env_origins[env_ids] + start
         root_state[:, 7:] = 0.0
-        self._desired_pos_w[env_ids] = self.scene.env_origins[env_ids] + goal
+
+        if isinstance(env_ids, torch.Tensor):
+            env_id_list = [int(env_id) for env_id in env_ids.detach().cpu().tolist()]
+        else:
+            env_id_list = [int(env_id) for env_id in env_ids]
+        starts = []
+        goals = []
+        for env_id in env_id_list:
+            layout = self._warehouse_layouts[env_id]
+            start = torch.tensor(layout.start_position, device=self.device, dtype=torch.float)
+            goal = torch.tensor(layout.goal_position, device=self.device, dtype=torch.float)
+            start[2] = self.cfg.start_height_m
+            goal[2] = self.cfg.goal_height_m
+            starts.append(start)
+            goals.append(goal)
+
+        start_positions = torch.stack(starts)
+        goal_positions = torch.stack(goals)
+        root_state[:, :3] = self.scene.env_origins[env_ids] + start_positions
+        self._desired_pos_w[env_ids] = self.scene.env_origins[env_ids] + goal_positions
 
         joint_pos = self._robot.data.default_joint_pos[env_ids]
         joint_vel = torch.zeros_like(self._robot.data.default_joint_vel[env_ids])

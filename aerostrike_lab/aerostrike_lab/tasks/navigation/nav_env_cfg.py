@@ -37,7 +37,9 @@ DEFAULT_ROBOT_PRIM_PATH = "/World/envs/env_.*/Robot"
 DEFAULT_WAREHOUSE_ROOT_PRIM_PATH = "/World/envs/env_0/Warehouse"
 DEFAULT_WAREHOUSE_MESH_PRIM_EXPR = "/World/envs/env_.*/Warehouse"
 DEFAULT_LAYOUT_SEED = 7
+DEFAULT_LAYOUT_SEEDS = (7, 11, 19, 23)
 DEFAULT_ACTION_VELOCITY_LIMIT_MPS = 5.0
+DEFAULT_ACTION_VERTICAL_VELOCITY_LIMIT_MPS = 1.0
 DEFAULT_START_HEIGHT_M = 0.5
 DEFAULT_GOAL_HEIGHT_M = 1.5
 DEFAULT_MIN_HEIGHT_M = 0.1
@@ -54,6 +56,7 @@ DEFAULT_COLLISION_PENALTY = 10.0
 DEFAULT_SUCCESS_BONUS = 20.0
 DEFAULT_INSTABILITY_PENALTY_WEIGHT = 0.05
 DEFAULT_ACTION_SMOOTHNESS_PENALTY_WEIGHT = 0.02
+DEFAULT_VERTICAL_VELOCITY_PENALTY_WEIGHT = 1.0
 DEFAULT_ALIVE_PENALTY = 0.01
 DEFAULT_TARGET_SPEED_MPS = 3.0
 DEFAULT_DEBUG_VIS = False
@@ -76,7 +79,9 @@ class NavigationSettings:
     warehouse_root_prim_path: str = DEFAULT_WAREHOUSE_ROOT_PRIM_PATH
     warehouse_mesh_prim_expr: str = DEFAULT_WAREHOUSE_MESH_PRIM_EXPR
     layout_seed: int = DEFAULT_LAYOUT_SEED
+    layout_seeds: tuple[int, ...] = DEFAULT_LAYOUT_SEEDS
     action_velocity_limit_mps: float = DEFAULT_ACTION_VELOCITY_LIMIT_MPS
+    action_vertical_velocity_limit_mps: float = DEFAULT_ACTION_VERTICAL_VELOCITY_LIMIT_MPS
     start_height_m: float = DEFAULT_START_HEIGHT_M
     goal_height_m: float = DEFAULT_GOAL_HEIGHT_M
     min_height_m: float = DEFAULT_MIN_HEIGHT_M
@@ -93,6 +98,7 @@ class NavigationSettings:
     success_bonus: float = DEFAULT_SUCCESS_BONUS
     instability_penalty_weight: float = DEFAULT_INSTABILITY_PENALTY_WEIGHT
     action_smoothness_penalty_weight: float = DEFAULT_ACTION_SMOOTHNESS_PENALTY_WEIGHT
+    vertical_velocity_penalty_weight: float = DEFAULT_VERTICAL_VELOCITY_PENALTY_WEIGHT
     alive_penalty: float = DEFAULT_ALIVE_PENALTY
     target_speed_mps: float = DEFAULT_TARGET_SPEED_MPS
     debug_vis: bool = DEFAULT_DEBUG_VIS
@@ -101,6 +107,13 @@ class NavigationSettings:
 def _as_section(data: dict[str, Any], key: str) -> dict[str, Any]:
     value = data.get(key, {})
     return value if isinstance(value, dict) else {}
+
+
+def _as_int_tuple(value: Any, default: tuple[int, ...]) -> tuple[int, ...]:
+    if not isinstance(value, list | tuple):
+        return default
+    seeds = tuple(int(item) for item in value)
+    return seeds or default
 
 
 def load_navigation_settings(config_path: Path | str = DEFAULT_CONFIG_PATH) -> NavigationSettings:
@@ -138,7 +151,11 @@ def load_navigation_settings(config_path: Path | str = DEFAULT_CONFIG_PATH) -> N
         warehouse_root_prim_path=str(warehouse.get("root_prim_path", DEFAULT_WAREHOUSE_ROOT_PRIM_PATH)),
         warehouse_mesh_prim_expr=str(warehouse.get("mesh_prim_expr", DEFAULT_WAREHOUSE_MESH_PRIM_EXPR)),
         layout_seed=int(warehouse.get("layout_seed", DEFAULT_LAYOUT_SEED)),
+        layout_seeds=_as_int_tuple(warehouse.get("layout_seeds"), DEFAULT_LAYOUT_SEEDS),
         action_velocity_limit_mps=float(action.get("velocity_limit_mps", DEFAULT_ACTION_VELOCITY_LIMIT_MPS)),
+        action_vertical_velocity_limit_mps=float(
+            action.get("vertical_velocity_limit_mps", DEFAULT_ACTION_VERTICAL_VELOCITY_LIMIT_MPS)
+        ),
         start_height_m=float(reset.get("start_height_m", DEFAULT_START_HEIGHT_M)),
         goal_height_m=float(reset.get("goal_height_m", DEFAULT_GOAL_HEIGHT_M)),
         min_height_m=float(reset.get("min_height_m", DEFAULT_MIN_HEIGHT_M)),
@@ -158,6 +175,9 @@ def load_navigation_settings(config_path: Path | str = DEFAULT_CONFIG_PATH) -> N
         instability_penalty_weight=float(reward.get("instability_penalty_weight", DEFAULT_INSTABILITY_PENALTY_WEIGHT)),
         action_smoothness_penalty_weight=float(
             reward.get("action_smoothness_penalty_weight", DEFAULT_ACTION_SMOOTHNESS_PENALTY_WEIGHT)
+        ),
+        vertical_velocity_penalty_weight=float(
+            reward.get("vertical_velocity_penalty_weight", DEFAULT_VERTICAL_VELOCITY_PENALTY_WEIGHT)
         ),
         alive_penalty=float(reward.get("alive_penalty", DEFAULT_ALIVE_PENALTY)),
         target_speed_mps=float(reward.get("target_speed_mps", DEFAULT_TARGET_SPEED_MPS)),
@@ -204,7 +224,9 @@ class AeroStrikeNavigationEnvCfg(DirectRLEnvCfg):
     warehouse_root_prim_path = _NAV_SETTINGS.warehouse_root_prim_path
     warehouse_mesh_prim_expr = _NAV_SETTINGS.warehouse_mesh_prim_expr
     warehouse_layout_seed = _NAV_SETTINGS.layout_seed
+    warehouse_layout_seeds = _NAV_SETTINGS.layout_seeds
     action_velocity_limit_mps = _NAV_SETTINGS.action_velocity_limit_mps
+    action_vertical_velocity_limit_mps = _NAV_SETTINGS.action_vertical_velocity_limit_mps
     start_height_m = _NAV_SETTINGS.start_height_m
     goal_height_m = _NAV_SETTINGS.goal_height_m
     min_height_m = _NAV_SETTINGS.min_height_m
@@ -221,6 +243,7 @@ class AeroStrikeNavigationEnvCfg(DirectRLEnvCfg):
     success_bonus = _NAV_SETTINGS.success_bonus
     instability_penalty_weight = _NAV_SETTINGS.instability_penalty_weight
     action_smoothness_penalty_weight = _NAV_SETTINGS.action_smoothness_penalty_weight
+    vertical_velocity_penalty_weight = _NAV_SETTINGS.vertical_velocity_penalty_weight
     alive_penalty = _NAV_SETTINGS.alive_penalty
     target_speed_mps = _NAV_SETTINGS.target_speed_mps
 

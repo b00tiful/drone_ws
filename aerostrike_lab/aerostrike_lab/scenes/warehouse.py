@@ -238,7 +238,8 @@ def spawn_warehouse_scene(layout: WarehouseLayout | None = None) -> WarehouseLay
     import isaaclab.sim as sim_utils
 
     light_cfg = sim_utils.DistantLightCfg(intensity=settings.light_intensity, color=settings.light_color)
-    light_cfg.func("/World/Light", light_cfg)
+    if not sim_utils.get_current_stage().GetPrimAtPath("/World/Light").IsValid():
+        light_cfg.func("/World/Light", light_cfg)
 
     floor_cfg = _make_cuboid_cfg(settings.arena_size_m + (settings.floor_thickness_m,), settings.floor_color)
     floor_cfg.func(

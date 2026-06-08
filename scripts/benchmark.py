@@ -114,6 +114,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
     if args_cli.layout_seed is not None:
         env_cfg.warehouse_layout_seed = args_cli.layout_seed
+        env_cfg.warehouse_layout_seeds = (args_cli.layout_seed,)
     if args_cli.seed == -1:
         args_cli.seed = random.randint(0, 10000)
     agent_cfg["seed"] = args_cli.seed

@@ -1,7 +1,12 @@
 <launch>
-  <arg name="config_file" default="$(find-pkg-share aerostrike_pkg)/config/policy_node.yaml"/>
+  <arg name="policy_config_file" default="$(find-pkg-share aerostrike_pkg)/config/policy_node.yaml"/>
+  <arg name="goal_config_file" default="$(find-pkg-share aerostrike_pkg)/config/goal_publisher.yaml"/>
+
+  <node pkg="aerostrike_pkg" exec="goal_publisher" name="goal_publisher" output="screen">
+    <param from="$(var goal_config_file)"/>
+  </node>
 
   <node pkg="aerostrike_pkg" exec="policy_node" name="policy_node" output="screen">
-    <param from="$(var config_file)"/>
+    <param from="$(var policy_config_file)"/>
   </node>
 </launch>

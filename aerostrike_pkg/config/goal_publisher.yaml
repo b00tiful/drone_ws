@@ -1,0 +1,8 @@
+goal_publisher:
+  ros__parameters:
+    goal_topic: "/aerostrike/goal"
+    frame_id: "world"
+    goal_x: -1.3586545954347482
+    goal_y: 5.883338244096684
+    goal_z: 1.5
+    publish_rate_hz: 2.0

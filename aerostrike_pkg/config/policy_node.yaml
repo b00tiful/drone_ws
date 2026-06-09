@@ -1,0 +1,9 @@
+policy_node:
+  ros__parameters:
+    policy_path: "/home/user/drone_ws/checkpoints/aerostrike_policy.onnx"
+    metadata_path: "/home/user/drone_ws/checkpoints/aerostrike_policy.yaml"
+    observation_topic: "/aerostrike/policy_observation"
+    action_topic: "/aerostrike/policy_action"
+    expected_observation_size: 41
+    expected_action_size: 3
+    publish_zero_on_error: false

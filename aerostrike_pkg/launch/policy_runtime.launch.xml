@@ -1,0 +1,7 @@
+<launch>
+  <arg name="config_file" default="$(find-pkg-share aerostrike_pkg)/config/policy_node.yaml"/>
+
+  <node pkg="aerostrike_pkg" exec="policy_node" name="policy_node" output="screen">
+    <param from="$(var config_file)"/>
+  </node>
+</launch>

@@ -1,0 +1,10 @@
+command_adapter:
+  ros__parameters:
+    action_topic: "/aerostrike/policy_action"
+    command_topic: "/aerostrike/body_velocity_cmd"
+    frame_id: "base_link"
+    expected_action_size: 3
+    horizontal_velocity_limit_mps: 5.0
+    vertical_velocity_limit_mps: 1.0
+    clamp_normalized_action: true
+    publish_zero_on_invalid: true

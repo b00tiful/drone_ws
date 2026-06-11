@@ -26,6 +26,13 @@ target_include_directories(observation_builder_core PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
+add_library(command_adapter_core src/command_adapter_core.cpp)
+target_compile_features(command_adapter_core PUBLIC cxx_std_17)
+target_include_directories(command_adapter_core PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
 add_executable(policy_node src/policy_node.cpp)
 target_compile_features(policy_node PRIVATE cxx_std_17)
 ament_target_dependencies(policy_node rclcpp std_msgs)
@@ -39,6 +46,11 @@ add_executable(observation_builder src/observation_builder.cpp)
 target_compile_features(observation_builder PRIVATE cxx_std_17)
 ament_target_dependencies(observation_builder rclcpp geometry_msgs nav_msgs std_msgs)
 target_link_libraries(observation_builder observation_builder_core)
+
+add_executable(command_adapter src/command_adapter.cpp)
+target_compile_features(command_adapter PRIVATE cxx_std_17)
+ament_target_dependencies(command_adapter rclcpp geometry_msgs std_msgs)
+target_link_libraries(command_adapter command_adapter_core)
 
 if(ONNXRUNTIME_FOUND)
   target_link_libraries(policy_node ONNXRuntime::ONNXRuntime)
@@ -59,6 +71,8 @@ install(TARGETS
   goal_publisher
   observation_builder
   observation_builder_core
+  command_adapter
+  command_adapter_core
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
@@ -76,6 +90,9 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(observation_builder_core_test test/observation_builder_core_test.cpp)
   target_link_libraries(observation_builder_core_test observation_builder_core)
+
+  ament_add_gtest(command_adapter_core_test test/command_adapter_core_test.cpp)
+  target_link_libraries(command_adapter_core_test command_adapter_core)
 endif()
 
 ament_package()

@@ -8,6 +8,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(yaml_cpp_vendor REQUIRED)
 
@@ -15,8 +16,15 @@ option(AEROSTRIKE_ENABLE_ONNXRUNTIME "Build policy_node with ONNX Runtime suppor
 
 if(AEROSTRIKE_ENABLE_ONNXRUNTIME)
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-  find_package(ONNXRuntime QUIET)
+  find_package(ONNXRUNTIME QUIET)
 endif()
+
+add_library(observation_builder_core src/observation_builder_core.cpp)
+target_compile_features(observation_builder_core PUBLIC cxx_std_17)
+target_include_directories(observation_builder_core PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
 
 add_executable(policy_node src/policy_node.cpp)
 target_compile_features(policy_node PRIVATE cxx_std_17)
@@ -27,7 +35,12 @@ add_executable(goal_publisher src/goal_publisher.cpp)
 target_compile_features(goal_publisher PRIVATE cxx_std_17)
 ament_target_dependencies(goal_publisher rclcpp geometry_msgs)
 
-if(ONNXRuntime_FOUND)
+add_executable(observation_builder src/observation_builder.cpp)
+target_compile_features(observation_builder PRIVATE cxx_std_17)
+ament_target_dependencies(observation_builder rclcpp geometry_msgs nav_msgs std_msgs)
+target_link_libraries(observation_builder observation_builder_core)
+
+if(ONNXRUNTIME_FOUND)
   target_link_libraries(policy_node ONNXRuntime::ONNXRuntime)
   target_compile_definitions(policy_node PRIVATE AEROSTRIKE_HAS_ONNXRUNTIME=1)
   add_executable(policy_inference_smoke test/policy_inference_smoke.cpp)
@@ -35,18 +48,34 @@ if(ONNXRuntime_FOUND)
   target_link_libraries(policy_inference_smoke ONNXRuntime::ONNXRuntime)
 else()
   target_compile_definitions(policy_node PRIVATE AEROSTRIKE_HAS_ONNXRUNTIME=0)
-  message(WARNING "ONNX Runtime C++ SDK not found; policy_node will build but inference is disabled. Set ONNXRUNTIME_ROOT to the SDK prefix to enable runtime inference.")
+  message(WARNING
+    "ONNX Runtime C++ SDK not found; policy_node will build but inference is disabled. "
+    "Set ONNXRUNTIME_ROOT to the SDK prefix to enable runtime inference."
+  )
 endif()
 
-install(TARGETS policy_node goal_publisher DESTINATION lib/${PROJECT_NAME})
+install(TARGETS
+  policy_node
+  goal_publisher
+  observation_builder
+  observation_builder_core
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
 if(TARGET policy_inference_smoke)
   install(TARGETS policy_inference_smoke DESTINATION lib/${PROJECT_NAME})
 endif()
+install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY config launch DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(observation_builder_core_test test/observation_builder_core_test.cpp)
+  target_link_libraries(observation_builder_core_test observation_builder_core)
 endif()
 
 ament_package()

@@ -1,3 +1,9 @@
+# Copyright 2026 AeroStrike
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 set(_ONNXRUNTIME_HINTS)
 
 if(DEFINED ONNXRUNTIME_ROOT)
@@ -24,11 +30,11 @@ find_library(
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
-  ONNXRuntime
+  ONNXRUNTIME
   REQUIRED_VARS ONNXRUNTIME_INCLUDE_DIR ONNXRUNTIME_LIBRARY
 )
 
-if(ONNXRuntime_FOUND AND NOT TARGET ONNXRuntime::ONNXRuntime)
+if(ONNXRUNTIME_FOUND AND NOT TARGET ONNXRuntime::ONNXRuntime)
   add_library(ONNXRuntime::ONNXRuntime UNKNOWN IMPORTED)
   set_target_properties(
     ONNXRuntime::ONNXRuntime

@@ -1,9 +1,14 @@
 <launch>
   <arg name="policy_config_file" default="$(find-pkg-share aerostrike_pkg)/config/policy_node.yaml"/>
   <arg name="goal_config_file" default="$(find-pkg-share aerostrike_pkg)/config/goal_publisher.yaml"/>
+  <arg name="observation_config_file" default="$(find-pkg-share aerostrike_pkg)/config/observation_builder.yaml"/>
 
   <node pkg="aerostrike_pkg" exec="goal_publisher" name="goal_publisher" output="screen">
     <param from="$(var goal_config_file)"/>
+  </node>
+
+  <node pkg="aerostrike_pkg" exec="observation_builder" name="observation_builder" output="screen">
+    <param from="$(var observation_config_file)"/>
   </node>
 
   <node pkg="aerostrike_pkg" exec="policy_node" name="policy_node" output="screen">

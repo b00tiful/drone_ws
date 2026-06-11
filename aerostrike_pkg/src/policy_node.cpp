@@ -1,3 +1,14 @@
+// Copyright 2026 AeroStrike
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
+#if AEROSTRIKE_HAS_ONNXRUNTIME
+#include <onnxruntime_cxx_api.h>
+#endif
+#include <yaml-cpp/yaml.h>
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -8,11 +19,6 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
-#include <yaml-cpp/yaml.h>
-
-#if AEROSTRIKE_HAS_ONNXRUNTIME
-#include <onnxruntime_cxx_api.h>
-#endif
 
 namespace aerostrike_pkg
 {
@@ -46,7 +52,9 @@ public:
   PolicyNode()
   : Node("policy_node")
   {
-    policy_path_ = declare_string_parameter(*this, "policy_path", "checkpoints/aerostrike_policy.onnx");
+    policy_path_ = declare_string_parameter(
+      *this, "policy_path",
+      "checkpoints/aerostrike_policy.onnx");
     metadata_path_ = declare_string_parameter(
       *this, "metadata_path", "checkpoints/aerostrike_policy.yaml");
     const auto observation_topic = declare_string_parameter(
@@ -61,7 +69,7 @@ public:
     observation_sub_ = create_subscription<Float32MultiArray>(
       observation_topic,
       rclcpp::SensorDataQoS(),
-      [this](const Float32MultiArray::SharedPtr msg) { handle_observation(msg); });
+      [this](const Float32MultiArray::SharedPtr msg) {handle_observation(msg);});
 
     configure_runtime();
 

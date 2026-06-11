@@ -1,3 +1,9 @@
+// Copyright 2026 AeroStrike
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
 #include <chrono>
 #include <memory>
 #include <stdexcept>
@@ -46,7 +52,7 @@ public:
       topic, rclcpp::QoS(1).reliable().transient_local());
     timer_ = create_wall_timer(
       std::chrono::duration<double>(1.0 / publish_rate_hz),
-      [this]() { publish_goal(); });
+      [this]() {publish_goal();});
 
     RCLCPP_INFO(
       get_logger(),

@@ -1,3 +1,11 @@
+// Copyright 2026 AeroStrike
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
+#include <onnxruntime_cxx_api.h>
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -7,8 +15,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <onnxruntime_cxx_api.h>
 
 namespace
 {

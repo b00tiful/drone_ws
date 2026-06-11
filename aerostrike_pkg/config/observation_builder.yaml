@@ -1,0 +1,15 @@
+observation_builder:
+  ros__parameters:
+    odometry_topic: "/aerostrike/odom"
+    ray_distances_topic: "/aerostrike/ray_distances"
+    goal_topic: "/aerostrike/goal"
+    previous_action_topic: "/aerostrike/policy_action"
+    observation_topic: "/aerostrike/policy_observation"
+    publish_rate_hz: 50.0
+    ray_count: 24
+    ray_min_range_m: 0.2
+    ray_max_range_m: 10.0
+    goal_distance_normalizer_m: 20.0
+    max_height_m: 4.0
+    ray_distances_are_normalized: false
+    twist_is_body_frame: true

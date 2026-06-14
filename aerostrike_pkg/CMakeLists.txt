@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.8)
 project(aerostrike_pkg)
 
+if(POLICY CMP0074)
+  cmake_policy(SET CMP0074 NEW)
+endif()
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -55,9 +59,18 @@ target_link_libraries(command_adapter command_adapter_core)
 if(ONNXRUNTIME_FOUND)
   target_link_libraries(policy_node ONNXRuntime::ONNXRuntime)
   target_compile_definitions(policy_node PRIVATE AEROSTRIKE_HAS_ONNXRUNTIME=1)
+  get_filename_component(ONNXRUNTIME_LIBRARY_DIR "${ONNXRUNTIME_LIBRARY}" DIRECTORY)
+  set_target_properties(policy_node PROPERTIES
+    BUILD_RPATH "${ONNXRUNTIME_LIBRARY_DIR}"
+    INSTALL_RPATH "${ONNXRUNTIME_LIBRARY_DIR}"
+  )
   add_executable(policy_inference_smoke test/policy_inference_smoke.cpp)
   target_compile_features(policy_inference_smoke PRIVATE cxx_std_17)
   target_link_libraries(policy_inference_smoke ONNXRuntime::ONNXRuntime)
+  set_target_properties(policy_inference_smoke PROPERTIES
+    BUILD_RPATH "${ONNXRUNTIME_LIBRARY_DIR}"
+    INSTALL_RPATH "${ONNXRUNTIME_LIBRARY_DIR}"
+  )
 else()
   target_compile_definitions(policy_node PRIVATE AEROSTRIKE_HAS_ONNXRUNTIME=0)
   message(WARNING

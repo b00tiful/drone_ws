@@ -37,6 +37,13 @@ target_include_directories(command_adapter_core PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
+add_library(metrics_logger_core src/metrics_logger_core.cpp)
+target_compile_features(metrics_logger_core PUBLIC cxx_std_17)
+target_include_directories(metrics_logger_core PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
 add_executable(policy_node src/policy_node.cpp)
 target_compile_features(policy_node PRIVATE cxx_std_17)
 ament_target_dependencies(policy_node rclcpp std_msgs)
@@ -55,6 +62,11 @@ add_executable(command_adapter src/command_adapter.cpp)
 target_compile_features(command_adapter PRIVATE cxx_std_17)
 ament_target_dependencies(command_adapter rclcpp geometry_msgs std_msgs)
 target_link_libraries(command_adapter command_adapter_core)
+
+add_executable(metrics_logger src/metrics_logger.cpp)
+target_compile_features(metrics_logger PRIVATE cxx_std_17)
+ament_target_dependencies(metrics_logger rclcpp geometry_msgs nav_msgs std_msgs)
+target_link_libraries(metrics_logger metrics_logger_core)
 
 if(ONNXRUNTIME_FOUND)
   target_link_libraries(policy_node ONNXRuntime::ONNXRuntime)
@@ -86,6 +98,8 @@ install(TARGETS
   observation_builder_core
   command_adapter
   command_adapter_core
+  metrics_logger
+  metrics_logger_core
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
@@ -106,6 +120,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(command_adapter_core_test test/command_adapter_core_test.cpp)
   target_link_libraries(command_adapter_core_test command_adapter_core)
+
+  ament_add_gtest(metrics_logger_core_test test/metrics_logger_core_test.cpp)
+  target_link_libraries(metrics_logger_core_test metrics_logger_core)
 endif()
 
 ament_package()

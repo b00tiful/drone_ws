@@ -1,0 +1,11 @@
+metrics_logger:
+  ros__parameters:
+    odometry_topic: "/aerostrike/odom"
+    ray_distances_topic: "/aerostrike/ray_distances"
+    goal_topic: "/aerostrike/goal"
+    output_path: "logs/ros_metrics/latest.csv"
+    log_period_s: 1.0
+    ray_count: 24
+    success_radius_m: 0.75
+    collision_radius_m: 0.35
+    proximity_radius_m: 1.5

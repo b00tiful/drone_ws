@@ -3,6 +3,7 @@
   <arg name="goal_config_file" default="$(find-pkg-share aerostrike_pkg)/config/goal_publisher.yaml"/>
   <arg name="observation_config_file" default="$(find-pkg-share aerostrike_pkg)/config/observation_builder.yaml"/>
   <arg name="command_config_file" default="$(find-pkg-share aerostrike_pkg)/config/command_adapter.yaml"/>
+  <arg name="metrics_config_file" default="$(find-pkg-share aerostrike_pkg)/config/metrics_logger.yaml"/>
 
   <node pkg="aerostrike_pkg" exec="goal_publisher" name="goal_publisher" output="screen">
     <param from="$(var goal_config_file)"/>
@@ -18,5 +19,9 @@
 
   <node pkg="aerostrike_pkg" exec="command_adapter" name="command_adapter" output="screen">
     <param from="$(var command_config_file)"/>
+  </node>
+
+  <node pkg="aerostrike_pkg" exec="metrics_logger" name="metrics_logger" output="screen">
+    <param from="$(var metrics_config_file)"/>
   </node>
 </launch>

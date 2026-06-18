@@ -3,6 +3,7 @@ metrics_logger:
     odometry_topic: "/aerostrike/odom"
     ray_distances_topic: "/aerostrike/ray_distances"
     goal_topic: "/aerostrike/goal"
+    terminal_metrics_topic: "/aerostrike/terminal_metrics"
     output_path: "logs/ros_metrics/latest.csv"
     log_period_s: 1.0
     ray_count: 24

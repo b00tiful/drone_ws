@@ -32,10 +32,12 @@ struct MetricsSnapshot
   bool started{false};
   bool success{false};
   bool collision{false};
+  bool timeout{false};
   bool in_proximity{false};
   bool current_collision{false};
   std::size_t odometry_samples{0};
   std::size_t ray_samples{0};
+  std::size_t terminal_samples{0};
   std::size_t proximity_samples{0};
   std::size_t collision_samples{0};
   double run_duration_s{0.0};
@@ -50,6 +52,15 @@ struct MetricsSnapshot
   double collision_sample_ratio{0.0};
   double proximity_time_s{0.0};
   double collision_time_s{0.0};
+};
+
+struct TerminalMetrics
+{
+  bool success{false};
+  bool collision{false};
+  bool timeout{false};
+  double final_goal_distance_m{std::numeric_limits<double>::infinity()};
+  double min_ray_distance_m{std::numeric_limits<double>::infinity()};
 };
 
 void validate_metrics_logger_config(const MetricsLoggerConfig & config);
@@ -70,16 +81,21 @@ public:
     const MetricsVector3 & linear_velocity_mps,
     const MetricsVector3 & goal_w);
 
+  void observe_terminal_metrics(const TerminalMetrics & terminal_metrics);
+
   MetricsSnapshot snapshot() const;
 
 private:
   bool started_{false};
   bool success_{false};
   bool collision_{false};
+  bool timeout_{false};
+  bool terminal_metrics_received_{false};
   bool in_proximity_{false};
   bool current_collision_{false};
   std::size_t odometry_samples_{0};
   std::size_t ray_samples_{0};
+  std::size_t terminal_samples_{0};
   std::size_t proximity_samples_{0};
   std::size_t collision_samples_{0};
   double start_time_s_{0.0};

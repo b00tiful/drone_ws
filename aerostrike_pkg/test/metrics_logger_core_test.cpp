@@ -123,6 +123,37 @@ TEST(MetricsLoggerCore, IgnoresNonfiniteRayDistances)
   EXPECT_NEAR(snapshot.min_ray_distance_m, 2.0, kTolerance);
 }
 
+TEST(MetricsLoggerCore, AppliesTerminalMetricsFromIsaacExtras)
+{
+  const MetricsLoggerConfig config = test_config();
+  MetricsAccumulator metrics;
+
+  metrics.observe_odometry(
+    config,
+    0.0,
+    MetricsVector3{0.0, 0.0, 0.0},
+    MetricsVector3{2.0, 0.0, 0.0},
+    MetricsVector3{10.0, 0.0, 0.0});
+  metrics.observe_terminal_metrics(
+    TerminalMetrics{true, false, false, 0.42, 1.25});
+  metrics.observe_odometry(
+    config,
+    1.0,
+    MetricsVector3{0.0, 0.0, 0.0},
+    MetricsVector3{0.0, 0.0, 0.0},
+    MetricsVector3{10.0, 0.0, 0.0});
+
+  const MetricsSnapshot snapshot = metrics.snapshot();
+
+  EXPECT_TRUE(snapshot.success);
+  EXPECT_FALSE(snapshot.collision);
+  EXPECT_FALSE(snapshot.timeout);
+  EXPECT_EQ(snapshot.terminal_samples, 1U);
+  EXPECT_NEAR(snapshot.final_goal_distance_m, 0.42, kTolerance);
+  EXPECT_NEAR(snapshot.min_goal_distance_m, 0.42, kTolerance);
+  EXPECT_NEAR(snapshot.min_ray_distance_m, 1.25, kTolerance);
+}
+
 TEST(MetricsLoggerCore, RejectsMalformedInputOrInvalidConfig)
 {
   MetricsLoggerConfig config = test_config();

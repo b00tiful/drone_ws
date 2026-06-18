@@ -83,6 +83,8 @@ public:
     const auto ray_distances_topic = declare_string_parameter(
       *this, "ray_distances_topic", "/aerostrike/ray_distances");
     const auto goal_topic = declare_string_parameter(*this, "goal_topic", "/aerostrike/goal");
+    const auto terminal_metrics_topic = declare_string_parameter(
+      *this, "terminal_metrics_topic", "/aerostrike/terminal_metrics");
     output_path_ = declare_string_parameter(*this, "output_path", "logs/ros_metrics/latest.csv");
     const double log_period_s = declare_double_parameter(*this, "log_period_s", 1.0);
 
@@ -109,6 +111,10 @@ public:
       goal_topic,
       rclcpp::QoS(1).reliable().transient_local(),
       [this](const PointStamped::SharedPtr msg) {handle_goal(msg);});
+    terminal_metrics_sub_ = create_subscription<Float32MultiArray>(
+      terminal_metrics_topic,
+      rclcpp::QoS(1).reliable(),
+      [this](const Float32MultiArray::SharedPtr msg) {handle_terminal_metrics(msg);});
 
     timer_ = create_wall_timer(
       std::chrono::duration<double>(log_period_s),
@@ -116,10 +122,11 @@ public:
 
     RCLCPP_INFO(
       get_logger(),
-      "metrics_logger ready: odom=%s rays=%s goal=%s output=%s period=%.2fs",
+      "metrics_logger ready: odom=%s rays=%s goal=%s terminal=%s output=%s period=%.2fs",
       odometry_topic.c_str(),
       ray_distances_topic.c_str(),
       goal_topic.c_str(),
+      terminal_metrics_topic.c_str(),
       output_path_.empty() ? "<disabled>" : output_path_.c_str(),
       log_period_s);
   }
@@ -151,7 +158,8 @@ private:
 
     output_
       << "write_time_s,event,run_duration_s,odometry_samples,ray_samples,success,collision,"
-      << "in_proximity,current_collision,proximity_samples,collision_samples,"
+      << "timeout,in_proximity,current_collision,terminal_samples,"
+      << "proximity_samples,collision_samples,"
       << "proximity_sample_ratio,collision_sample_ratio,proximity_time_s,collision_time_s,"
       << "average_speed_mps,latest_speed_mps,max_speed_mps,final_goal_distance_m,"
       << "min_goal_distance_m,latest_min_ray_distance_m,min_ray_distance_m\n";
@@ -204,6 +212,28 @@ private:
     }
   }
 
+  void handle_terminal_metrics(const Float32MultiArray::SharedPtr msg)
+  {
+    if (msg->data.size() < 5U) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(),
+        *get_clock(),
+        2000,
+        "Ignoring terminal metrics with %zu values; expected at least 5",
+        msg->data.size());
+      return;
+    }
+
+    metrics_.observe_terminal_metrics(
+      TerminalMetrics{
+        msg->data[0] > 0.5F,
+        msg->data[1] > 0.5F,
+        msg->data[2] > 0.5F,
+        static_cast<double>(msg->data[3]),
+        static_cast<double>(msg->data[4]),
+      });
+  }
+
   double message_time_s(const Odometry & msg)
   {
     if (msg.header.stamp.sec == 0 && msg.header.stamp.nanosec == 0U) {
@@ -237,8 +267,10 @@ private:
             << snapshot.ray_samples << ','
             << (snapshot.success ? 1 : 0) << ','
             << (snapshot.collision ? 1 : 0) << ','
+            << (snapshot.timeout ? 1 : 0) << ','
             << (snapshot.in_proximity ? 1 : 0) << ','
             << (snapshot.current_collision ? 1 : 0) << ','
+            << snapshot.terminal_samples << ','
             << snapshot.proximity_samples << ','
             << snapshot.collision_samples << ','
             << snapshot.proximity_sample_ratio << ','
@@ -263,12 +295,13 @@ private:
 
     RCLCPP_INFO(
       get_logger(),
-      "metrics[%s]: duration=%.2fs success=%s collision=%s avg_speed=%.3f m/s "
+      "metrics[%s]: duration=%.2fs success=%s collision=%s timeout=%s avg_speed=%.3f m/s "
       "goal=%.3f m min_ray=%.3f m proximity_ratio=%.3f",
       event.c_str(),
       snapshot.run_duration_s,
       snapshot.success ? "yes" : "no",
       snapshot.collision ? "yes" : "no",
+      snapshot.timeout ? "yes" : "no",
       snapshot.average_speed_mps,
       snapshot.final_goal_distance_m,
       snapshot.min_ray_distance_m,
@@ -284,6 +317,7 @@ private:
   rclcpp::Subscription<Odometry>::SharedPtr odometry_sub_;
   rclcpp::Subscription<Float32MultiArray>::SharedPtr ray_distances_sub_;
   rclcpp::Subscription<PointStamped>::SharedPtr goal_sub_;
+  rclcpp::Subscription<Float32MultiArray>::SharedPtr terminal_metrics_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 }  // namespace aerostrike_pkg

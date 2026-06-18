@@ -140,10 +140,30 @@ void MetricsAccumulator::observe_odometry(
   ++odometry_samples_;
   latest_speed_mps_ = speed_mps;
   max_speed_mps_ = std::max(max_speed_mps_, speed_mps);
-  final_goal_distance_m_ = goal_distance_m;
-  min_goal_distance_m_ = std::min(min_goal_distance_m_, goal_distance_m);
+  if (!terminal_metrics_received_) {
+    final_goal_distance_m_ = goal_distance_m;
+    min_goal_distance_m_ = std::min(min_goal_distance_m_, goal_distance_m);
+  }
   if (goal_distance_m <= config.success_radius_m) {
     success_ = true;
+  }
+}
+
+void MetricsAccumulator::observe_terminal_metrics(const TerminalMetrics & terminal_metrics)
+{
+  ++terminal_samples_;
+  terminal_metrics_received_ = true;
+  success_ = success_ || terminal_metrics.success;
+  collision_ = collision_ || terminal_metrics.collision;
+  timeout_ = timeout_ || terminal_metrics.timeout;
+
+  if (std::isfinite(terminal_metrics.final_goal_distance_m)) {
+    final_goal_distance_m_ = terminal_metrics.final_goal_distance_m;
+    min_goal_distance_m_ = std::min(min_goal_distance_m_, terminal_metrics.final_goal_distance_m);
+  }
+  if (std::isfinite(terminal_metrics.min_ray_distance_m)) {
+    latest_min_ray_distance_m_ = terminal_metrics.min_ray_distance_m;
+    min_ray_distance_m_ = std::min(min_ray_distance_m_, terminal_metrics.min_ray_distance_m);
   }
 }
 
@@ -153,10 +173,12 @@ MetricsSnapshot MetricsAccumulator::snapshot() const
   result.started = started_;
   result.success = success_;
   result.collision = collision_;
+  result.timeout = timeout_;
   result.in_proximity = in_proximity_;
   result.current_collision = current_collision_;
   result.odometry_samples = odometry_samples_;
   result.ray_samples = ray_samples_;
+  result.terminal_samples = terminal_samples_;
   result.proximity_samples = proximity_samples_;
   result.collision_samples = collision_samples_;
   result.run_duration_s = started_ ? std::max(0.0, last_time_s_ - start_time_s_) : 0.0;

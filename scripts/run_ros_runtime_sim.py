@@ -21,6 +21,16 @@ def parse_args() -> argparse.Namespace:
     """Parse CLI arguments before launching Isaac Sim."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--steps", type=int, default=2500, help="Maximum Isaac env steps to run.")
+    parser.add_argument(
+        "--stop_on_termination",
+        action="store_true",
+        help="Exit after publishing the first terminal episode state instead of resetting.",
+    )
+    parser.add_argument(
+        "--visible",
+        action="store_true",
+        help="Launch Isaac Sim with a viewport instead of the default headless mode.",
+    )
     parser.add_argument("--publish_rate_hz", type=float, default=50.0, help="ROS state/ray publish rate.")
     parser.add_argument(
         "--real_time_factor",
@@ -53,11 +63,20 @@ def parse_args() -> argparse.Namespace:
         default="/aerostrike/body_velocity_cmd",
         help="Body-frame command topic produced by command_adapter.",
     )
+    parser.add_argument(
+        "--terminal_metrics_topic",
+        type=str,
+        default="/aerostrike/terminal_metrics",
+        help="Episode terminal metrics topic consumed by metrics_logger.",
+    )
     parser.add_argument("--world_frame_id", type=str, default="world", help="Odometry frame id.")
     parser.add_argument("--body_frame_id", type=str, default="base_link", help="Odometry child frame id.")
     AppLauncher.add_app_launcher_args(parser)
     parser.set_defaults(headless=True)
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.visible:
+        args.headless = False
+    return args
 
 
 args_cli = parse_args()
@@ -106,6 +125,11 @@ class IsaacRuntimeBridge(Node):
 
         self._odom_pub = self.create_publisher(Odometry, args.odom_topic, sensor_qos())
         self._rays_pub = self.create_publisher(Float32MultiArray, args.ray_distances_topic, sensor_qos())
+        self._terminal_metrics_pub = self.create_publisher(
+            Float32MultiArray,
+            args.terminal_metrics_topic,
+            command_qos(),
+        )
         self._command_sub = self.create_subscription(
             TwistStamped,
             args.command_topic,
@@ -172,6 +196,37 @@ class IsaacRuntimeBridge(Node):
         rays.data = [float(value) for value in ray_distances_m.tolist()]
         self._rays_pub.publish(rays)
 
+    def publish_terminal_metrics(
+        self,
+        env: AeroStrikeNavigationEnv,
+        terminated: torch.Tensor,
+        truncated: torch.Tensor,
+    ) -> None:
+        """Publish episode-level metrics captured by Isaac Lab before auto-reset."""
+        log = env.extras.get("log", {})
+        terminal = Float32MultiArray()
+        terminal.data = [
+            float(log.get("Episode_Termination/success", 0.0)),
+            float(log.get("Episode_Termination/collision", 0.0)),
+            float(torch.count_nonzero(truncated).detach().cpu().item()),
+            float(log.get("Metrics/final_goal_distance", math.nan)),
+            float(log.get("Metrics/min_ray_distance_m", math.nan)),
+        ]
+        self._terminal_metrics_pub.publish(terminal)
+        self.get_logger().info(
+            "Terminal metrics: success=%.0f collision=%.0f timeout=%.0f "
+            "final_goal_distance=%.3f min_ray=%.3f terminated=%s truncated=%s"
+            % (
+                terminal.data[0],
+                terminal.data[1],
+                terminal.data[2],
+                terminal.data[3],
+                terminal.data[4],
+                bool(torch.count_nonzero(terminated).detach().cpu().item()),
+                bool(torch.count_nonzero(truncated).detach().cpu().item()),
+            )
+        )
+
 
 def make_env(args: argparse.Namespace) -> AeroStrikeNavigationEnv:
     """Create the single-env warehouse simulation used by the ROS bridge."""
@@ -233,13 +288,21 @@ def main() -> None:
             action = node.normalized_action(env)
             _, _, terminated, truncated, _ = env.step(action)
 
+            if bool(torch.logical_or(terminated, truncated).any()):
+                node.publish_terminal_metrics(env, terminated, truncated)
+                node.publish_state(env)
+                if args_cli.stop_on_termination:
+                    rclpy.spin_once(node, timeout_sec=0.05)
+                    time.sleep(0.1)
+                    break
+                env.reset()
+                next_publish_wall_time = time.monotonic() + publish_period_s
+                continue
+
             now = time.monotonic()
             if now >= next_publish_wall_time:
                 node.publish_state(env)
                 next_publish_wall_time = now + publish_period_s
-
-            if bool(torch.logical_or(terminated, truncated).any()):
-                env.reset()
 
             if args_cli.real_time_factor > 0.0:
                 target_step_wall_s = env.step_dt / args_cli.real_time_factor

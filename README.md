@@ -39,6 +39,23 @@ Then install the Isaac Lab extension in editable mode:
 python3 -m pip install -e aerostrike_lab
 ```
 
+## Demo
+
+Run the full ROS 2 policy loop and visible Isaac Sim bridge from one terminal:
+
+```bash
+./scripts/run_demo.sh
+```
+
+For a short validation run that exits after one successful episode:
+
+```bash
+./scripts/run_demo.sh --headless --stop-on-termination
+```
+
+The script starts `policy_runtime.launch.xml`, runs the Isaac bridge, cleans up
+ROS on exit, and prints the final row from `logs/ros_metrics/latest.csv`.
+
 ## Development Notes
 
 - Use Isaac Lab DirectRLEnv for the navigation task.

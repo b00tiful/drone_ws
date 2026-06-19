@@ -14,10 +14,10 @@ Options:
   --layout-seed N            Warehouse layout seed. Default: 7.
   --scene-variant NAME       Scene variant: warehouse or hallway. Default: warehouse.
   --camera-mode MODE         Visible camera: third_person, first_person, or free. Default: third_person.
-  --camera-distance X        Follow camera distance in meters. Default: 7.0.
-  --camera-height X          Follow camera height in meters. Default: 3.0.
-  --camera-target-height X   Camera look-at height above drone root. Default: 0.45.
-  --camera-smoothing X       Follow camera smoothing alpha [0, 1]. Default: 0.2.
+  --camera-distance X        Follow camera distance in meters. Default: 0.40.
+  --camera-height X          Follow camera height above drone root. Default: 0.25.
+  --camera-target-height X   Camera look-at height above drone root. Default: 0.20.
+  --camera-smoothing X       Follow camera smoothing alpha [0, 1]. Default: 0.50.
   --demo-robot-marker        Show a non-physics visual marker on the drone.
   --demo-robot-marker-radius X
                              Marker radius in meters. Default: 0.28.
@@ -40,10 +40,10 @@ steps=4500
 layout_seed=7
 scene_variant=warehouse
 camera_mode=third_person
-camera_distance_m=7.0
-camera_height_m=3.0
-camera_target_height_m=0.45
-camera_smoothing=0.2
+camera_distance_m=0.40
+camera_height_m=0.25
+camera_target_height_m=0.20
+camera_smoothing=0.50
 demo_robot_marker=false
 demo_robot_marker_radius_m=0.28
 real_time_factor=1.0

@@ -41,25 +41,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--camera_distance_m",
         type=float,
-        default=7.0,
+        default=0.40,
         help="Third-person follow distance behind the drone.",
     )
     parser.add_argument(
         "--camera_height_m",
         type=float,
-        default=3.0,
+        default=0.25,
         help="Third-person camera height above the drone.",
     )
     parser.add_argument(
         "--camera_target_height_m",
         type=float,
-        default=0.45,
+        default=0.20,
         help="Camera target height above the drone root.",
     )
     parser.add_argument(
         "--camera_smoothing",
         type=float,
-        default=0.2,
+        default=0.50,
         help="Camera smoothing alpha in [0, 1]; 1 snaps to the target pose.",
     )
     parser.add_argument(

@@ -8,6 +8,7 @@ import math
 import sys
 import time
 from pathlib import Path
+from typing import Literal
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 AEROSTRIKE_LAB_PATH = WORKSPACE_ROOT / "aerostrike_lab"
@@ -30,6 +31,53 @@ def parse_args() -> argparse.Namespace:
         "--visible",
         action="store_true",
         help="Launch Isaac Sim with a viewport instead of the default headless mode.",
+    )
+    parser.add_argument(
+        "--camera_mode",
+        choices=("free", "third_person", "first_person"),
+        default="third_person",
+        help="Visible-mode camera behavior. Use free to leave the viewport user-controlled.",
+    )
+    parser.add_argument(
+        "--camera_distance_m",
+        type=float,
+        default=7.0,
+        help="Third-person follow distance behind the drone.",
+    )
+    parser.add_argument(
+        "--camera_height_m",
+        type=float,
+        default=3.0,
+        help="Third-person camera height above the drone.",
+    )
+    parser.add_argument(
+        "--camera_target_height_m",
+        type=float,
+        default=0.45,
+        help="Camera target height above the drone root.",
+    )
+    parser.add_argument(
+        "--camera_smoothing",
+        type=float,
+        default=0.2,
+        help="Camera smoothing alpha in [0, 1]; 1 snaps to the target pose.",
+    )
+    parser.add_argument(
+        "--scene_variant",
+        choices=("warehouse", "hallway"),
+        default="warehouse",
+        help="Procedural scene variant to run without changing the policy observation/action contract.",
+    )
+    parser.add_argument(
+        "--demo_robot_marker",
+        action="store_true",
+        help="Show a non-physics visual marker on the drone for video readability.",
+    )
+    parser.add_argument(
+        "--demo_robot_marker_radius_m",
+        type=float,
+        default=0.28,
+        help="Radius of the optional drone readability marker.",
     )
     parser.add_argument("--publish_rate_hz", type=float, default=50.0, help="ROS state/ray publish rate.")
     parser.add_argument(
@@ -85,7 +133,9 @@ simulation_app = app_launcher.app
 
 import rclpy
 import torch
+import isaaclab.sim as sim_utils
 from geometry_msgs.msg import TwistStamped
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
@@ -94,6 +144,9 @@ from std_msgs.msg import Float32MultiArray
 from aerostrike_lab.assets.quadrotor import AEROSTRIKE_RAY_SENSOR_SETTINGS
 from aerostrike_lab.tasks.navigation.nav_env import AeroStrikeNavigationEnv
 from aerostrike_lab.tasks.navigation.nav_env_cfg import AeroStrikeNavigationEnvCfg
+
+
+CameraMode = Literal["free", "third_person", "first_person"]
 
 
 def sensor_qos() -> QoSProfile:
@@ -228,11 +281,82 @@ class IsaacRuntimeBridge(Node):
         )
 
 
+class DemoCamera:
+    """Visible-mode viewport camera tracking for demo recording."""
+
+    def __init__(self, args: argparse.Namespace) -> None:
+        self._mode: CameraMode = args.camera_mode
+        self._distance_m = args.camera_distance_m
+        self._height_m = args.camera_height_m
+        self._target_height_m = args.camera_target_height_m
+        self._smoothing = args.camera_smoothing
+        self._eye: torch.Tensor | None = None
+        self._target: torch.Tensor | None = None
+
+    def update(self, env: AeroStrikeNavigationEnv) -> None:
+        """Update the active Isaac viewport camera."""
+        if self._mode == "free":
+            return
+
+        root_pos = env._robot.data.root_pos_w[0].detach().cpu()
+        goal_pos = env._desired_pos_w[0].detach().cpu()
+        forward = goal_pos - root_pos
+        forward[2] = 0.0
+        norm = torch.linalg.norm(forward).item()
+        if norm < 1.0e-4:
+            forward = torch.tensor((0.0, 1.0, 0.0), dtype=torch.float)
+        else:
+            forward = forward / norm
+
+        if self._mode == "third_person":
+            desired_eye = root_pos - forward * self._distance_m
+            desired_eye[2] = root_pos[2] + self._height_m
+            desired_target = root_pos + forward * 2.0
+            desired_target[2] = root_pos[2] + self._target_height_m
+        else:
+            desired_eye = root_pos + forward * 0.35
+            desired_eye[2] = root_pos[2] + self._target_height_m
+            desired_target = root_pos + forward * max(3.0, self._distance_m)
+            desired_target[2] = root_pos[2] + self._target_height_m
+
+        alpha = max(0.0, min(1.0, self._smoothing))
+        if self._eye is None or self._target is None:
+            self._eye = desired_eye
+            self._target = desired_target
+        else:
+            self._eye = self._eye * (1.0 - alpha) + desired_eye * alpha
+            self._target = self._target * (1.0 - alpha) + desired_target * alpha
+
+        env.sim.set_camera_view(eye=self._eye.tolist(), target=self._target.tolist())
+
+
+class DemoRobotMarker:
+    """Non-physics visual marker that makes the small Crazyflie readable on video."""
+
+    def __init__(self, radius_m: float) -> None:
+        marker_cfg = VisualizationMarkersCfg(
+            prim_path="/Visuals/AeroStrikeDroneMarker",
+            markers={
+                "drone": sim_utils.SphereCfg(
+                    radius=radius_m,
+                    visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.8, 1.0)),
+                )
+            },
+        )
+        self._visualizer = VisualizationMarkers(marker_cfg)
+
+    def update(self, env: AeroStrikeNavigationEnv) -> None:
+        position = env._robot.data.root_pos_w[0:1].detach().cpu()
+        orientation = env._robot.data.root_quat_w[0:1].detach().cpu()
+        self._visualizer.visualize(position, orientation)
+
+
 def make_env(args: argparse.Namespace) -> AeroStrikeNavigationEnv:
     """Create the single-env warehouse simulation used by the ROS bridge."""
     cfg = AeroStrikeNavigationEnvCfg()
     cfg.scene.num_envs = 1
     cfg.sim.device = args.device if args.device is not None else cfg.sim.device
+    cfg.warehouse_scene_variant = args.scene_variant
     cfg.warehouse_layout_seed = args.layout_seed
     cfg.warehouse_layout_seeds = (args.layout_seed,)
     return AeroStrikeNavigationEnv(cfg)
@@ -248,10 +372,20 @@ def main() -> None:
         raise ValueError("--real_time_factor must be non-negative")
     if args_cli.command_timeout_s <= 0.0:
         raise ValueError("--command_timeout_s must be positive")
+    if args_cli.camera_distance_m <= 0.0:
+        raise ValueError("--camera_distance_m must be positive")
+    if args_cli.camera_height_m <= 0.0:
+        raise ValueError("--camera_height_m must be positive")
+    if args_cli.camera_smoothing < 0.0 or args_cli.camera_smoothing > 1.0:
+        raise ValueError("--camera_smoothing must be in [0, 1]")
+    if args_cli.demo_robot_marker_radius_m <= 0.0:
+        raise ValueError("--demo_robot_marker_radius_m must be positive")
 
     rclpy.init()
     node: IsaacRuntimeBridge | None = None
     env: AeroStrikeNavigationEnv | None = None
+    camera: DemoCamera | None = None
+    marker: DemoRobotMarker | None = None
     env_started = False
     publish_period_s = 1.0 / args_cli.publish_rate_hz
     next_publish_wall_time = time.monotonic()
@@ -261,6 +395,12 @@ def main() -> None:
         env = make_env(args_cli)
         env.reset()
         env_started = True
+        if args_cli.visible:
+            camera = DemoCamera(args_cli)
+            camera.update(env)
+            if args_cli.demo_robot_marker:
+                marker = DemoRobotMarker(args_cli.demo_robot_marker_radius_m)
+                marker.update(env)
         if env._ray_caster.num_rays != AEROSTRIKE_RAY_SENSOR_SETTINGS.ray_count:
             raise RuntimeError(
                 f"Ray count mismatch: expected {AEROSTRIKE_RAY_SENSOR_SETTINGS.ray_count}, "
@@ -272,7 +412,8 @@ def main() -> None:
         node.get_logger().info(
             "Isaac runtime bridge ready: "
             f"{args_cli.odom_topic} + {args_cli.ray_distances_topic} -> "
-            f"{args_cli.command_topic}, layout_seed={args_cli.layout_seed}"
+            f"{args_cli.command_topic}, layout_seed={args_cli.layout_seed}, "
+            f"scene_variant={args_cli.scene_variant}"
         )
         node.get_logger().info(
             "Simulation start="
@@ -287,6 +428,10 @@ def main() -> None:
             rclpy.spin_once(node, timeout_sec=0.0)
             action = node.normalized_action(env)
             _, _, terminated, truncated, _ = env.step(action)
+            if camera is not None:
+                camera.update(env)
+            if marker is not None:
+                marker.update(env)
 
             if bool(torch.logical_or(terminated, truncated).any()):
                 node.publish_terminal_metrics(env, terminated, truncated)
@@ -296,6 +441,10 @@ def main() -> None:
                     time.sleep(0.1)
                     break
                 env.reset()
+                if camera is not None:
+                    camera.update(env)
+                if marker is not None:
+                    marker.update(env)
                 next_publish_wall_time = time.monotonic() + publish_period_s
                 continue
 

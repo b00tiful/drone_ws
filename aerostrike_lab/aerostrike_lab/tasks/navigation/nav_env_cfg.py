@@ -36,6 +36,7 @@ DEFAULT_STATE_SPACE = 0
 DEFAULT_ROBOT_PRIM_PATH = "/World/envs/env_.*/Robot"
 DEFAULT_WAREHOUSE_ROOT_PRIM_PATH = "/World/envs/env_0/Warehouse"
 DEFAULT_WAREHOUSE_MESH_PRIM_EXPR = "/World/envs/env_.*/Warehouse"
+DEFAULT_WAREHOUSE_SCENE_VARIANT = "warehouse"
 DEFAULT_LAYOUT_SEED = 7
 DEFAULT_LAYOUT_SEEDS = (7, 11, 19, 23)
 DEFAULT_ACTION_VELOCITY_LIMIT_MPS = 5.0
@@ -78,6 +79,7 @@ class NavigationSettings:
     robot_prim_path: str = DEFAULT_ROBOT_PRIM_PATH
     warehouse_root_prim_path: str = DEFAULT_WAREHOUSE_ROOT_PRIM_PATH
     warehouse_mesh_prim_expr: str = DEFAULT_WAREHOUSE_MESH_PRIM_EXPR
+    warehouse_scene_variant: str = DEFAULT_WAREHOUSE_SCENE_VARIANT
     layout_seed: int = DEFAULT_LAYOUT_SEED
     layout_seeds: tuple[int, ...] = DEFAULT_LAYOUT_SEEDS
     action_velocity_limit_mps: float = DEFAULT_ACTION_VELOCITY_LIMIT_MPS
@@ -150,6 +152,7 @@ def load_navigation_settings(config_path: Path | str = DEFAULT_CONFIG_PATH) -> N
         robot_prim_path=str(robot.get("prim_path", DEFAULT_ROBOT_PRIM_PATH)),
         warehouse_root_prim_path=str(warehouse.get("root_prim_path", DEFAULT_WAREHOUSE_ROOT_PRIM_PATH)),
         warehouse_mesh_prim_expr=str(warehouse.get("mesh_prim_expr", DEFAULT_WAREHOUSE_MESH_PRIM_EXPR)),
+        warehouse_scene_variant=str(warehouse.get("scene_variant", DEFAULT_WAREHOUSE_SCENE_VARIANT)),
         layout_seed=int(warehouse.get("layout_seed", DEFAULT_LAYOUT_SEED)),
         layout_seeds=_as_int_tuple(warehouse.get("layout_seeds"), DEFAULT_LAYOUT_SEEDS),
         action_velocity_limit_mps=float(action.get("velocity_limit_mps", DEFAULT_ACTION_VELOCITY_LIMIT_MPS)),
@@ -223,6 +226,7 @@ class AeroStrikeNavigationEnvCfg(DirectRLEnvCfg):
     robot: ArticulationCfg = make_quadrotor_cfg(prim_path=_NAV_SETTINGS.robot_prim_path)
     warehouse_root_prim_path = _NAV_SETTINGS.warehouse_root_prim_path
     warehouse_mesh_prim_expr = _NAV_SETTINGS.warehouse_mesh_prim_expr
+    warehouse_scene_variant = _NAV_SETTINGS.warehouse_scene_variant
     warehouse_layout_seed = _NAV_SETTINGS.layout_seed
     warehouse_layout_seeds = _NAV_SETTINGS.layout_seeds
     action_velocity_limit_mps = _NAV_SETTINGS.action_velocity_limit_mps

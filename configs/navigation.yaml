@@ -22,6 +22,7 @@ robot:
 warehouse:
   root_prim_path: "/World/envs/env_0/Warehouse"
   mesh_prim_expr: "/World/envs/env_.*/Warehouse"
+  scene_variant: "warehouse"
   layout_seed: 7
   layout_seeds: [7, 11, 19, 23, 19]
 

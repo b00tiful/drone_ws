@@ -19,6 +19,12 @@ def parse_args() -> argparse.Namespace:
     """Parse CLI arguments before launching Isaac Sim."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed", type=int, default=None, help="Override the YAML layout seed.")
+    parser.add_argument(
+        "--scene_variant",
+        choices=("warehouse", "hallway"),
+        default="warehouse",
+        help="Procedural scene variant to spawn.",
+    )
     parser.add_argument("--steps", type=int, default=30, help="Number of simulation steps to run.")
     AppLauncher.add_app_launcher_args(parser)
     parser.set_defaults(headless=True)
@@ -45,11 +51,16 @@ def main() -> None:
     sim.set_camera_view(eye=[13.0, 13.0, 9.0], target=[0.0, 0.0, 1.0])
 
     settings = load_warehouse_scene_settings()
-    layout = sample_warehouse_layout(settings=settings, seed=args_cli.seed)
+    layout = sample_warehouse_layout(
+        settings=settings,
+        seed=args_cli.seed,
+        scene_variant=args_cli.scene_variant,
+    )
     spawned_layout = spawn_warehouse_scene(layout)
 
     sim.reset()
     print("[INFO]: AeroStrike warehouse smoke-check setup complete.")
+    print(f"[INFO]: Scene variant: {spawned_layout.settings.scene_variant}")
     print(f"[INFO]: Layout seed: {spawned_layout.seed}")
     print(f"[INFO]: Arena size: {spawned_layout.settings.arena_size_m}")
     print(f"[INFO]: Static mesh targets: {len(spawned_layout.mesh_prim_paths)}")

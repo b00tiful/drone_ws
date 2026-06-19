@@ -2,6 +2,7 @@
 # Procedural generation details are implemented in the warehouse scene task.
 
 warehouse:
+  scene_variant: "warehouse"
   arena_size_m: [20.0, 20.0]
   wall_height_m: 4.0
   wall_thickness_m: 0.25
@@ -27,6 +28,15 @@ warehouse:
   lighting:
     intensity: 3500.0
     color: [0.80, 0.82, 0.85]
+  hallway:
+    arena_size_m: [12.0, 36.0]
+    obstacle_count: 14
+    start_y_m: -15.0
+    goal_y_m: 15.0
+    lane_x_range_m: [-3.0, 3.0]
+    obstacle_x_range_m: [-2.8, 2.8]
+    obstacle_y_margin_m: 4.0
+    obstacle_spacing_m: 2.2
 
 sensor:
   ray_count: 24

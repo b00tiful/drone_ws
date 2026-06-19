@@ -70,7 +70,11 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         for env_index in range(self.cfg.scene.num_envs):
             seed = self._layout_seed_for_env(env_index)
             root_prim_path = self._warehouse_root_for_env(env_index)
-            layout = sample_warehouse_layout(seed=seed, root_prim_path=root_prim_path)
+            layout = sample_warehouse_layout(
+                seed=seed,
+                root_prim_path=root_prim_path,
+                scene_variant=self.cfg.warehouse_scene_variant,
+            )
             self._warehouse_layouts.append(spawn_warehouse_scene(layout))
         self._warehouse_layout = self._warehouse_layouts[0]
 

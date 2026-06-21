@@ -18,10 +18,12 @@ Options:
   --camera-height X          Follow camera height above drone root. Default: 0.25.
   --camera-target-height X   Camera look-at height above drone root. Default: 0.20.
   --camera-smoothing X       Follow camera smoothing alpha [0, 1]. Default: 0.50.
+  --camera-max-yaw-rate X    Follow camera heading limit in deg/s. Default: 90.
   --demo-robot-marker        Show a non-physics visual marker on the drone.
   --demo-robot-marker-radius X
-                             Marker radius in meters. Default: 0.28.
-  --real-time-factor X       Isaac wall-clock pacing. Default: 1.0.
+                             Marker axis half-length in meters. Default: 0.16.
+  --real-time-factor X       Isaac wall-clock pacing. Default: 0.0.
+  --command-timeout X        Seconds before stale commands are zeroed. Default: 1.0.
   --ros-startup-wait X       Seconds to let ROS launch settle. Default: 4.
   --build                    Build aerostrike_pkg before launching.
   -h, --help                 Show this help.
@@ -44,9 +46,11 @@ camera_distance_m=0.40
 camera_height_m=0.25
 camera_target_height_m=0.20
 camera_smoothing=0.50
+camera_max_yaw_rate_dps=90.0
 demo_robot_marker=false
-demo_robot_marker_radius_m=0.28
-real_time_factor=1.0
+demo_robot_marker_radius_m=0.16
+real_time_factor=0.0
+command_timeout_s=1.0
 ros_startup_wait_s=4
 visible=true
 stop_on_termination=false
@@ -95,6 +99,10 @@ while [[ $# -gt 0 ]]; do
             camera_smoothing="$2"
             shift 2
             ;;
+        --camera-max-yaw-rate)
+            camera_max_yaw_rate_dps="$2"
+            shift 2
+            ;;
         --demo-robot-marker)
             demo_robot_marker=true
             shift
@@ -105,6 +113,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --real-time-factor)
             real_time_factor="$2"
+            shift 2
+            ;;
+        --command-timeout)
+            command_timeout_s="$2"
             shift 2
             ;;
         --ros-startup-wait)
@@ -271,9 +283,11 @@ isaac_args=(
     --camera_height_m "${camera_height_m}"
     --camera_target_height_m "${camera_target_height_m}"
     --camera_smoothing "${camera_smoothing}"
+    --camera_max_yaw_rate_dps "${camera_max_yaw_rate_dps}"
     --demo_robot_marker_radius_m "${demo_robot_marker_radius_m}"
     --steps "${steps}"
     --real_time_factor "${real_time_factor}"
+    --command_timeout_s "${command_timeout_s}"
 )
 
 if [[ "${visible}" == "true" ]]; then

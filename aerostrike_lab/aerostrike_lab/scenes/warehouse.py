@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from random import Random
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 try:
     import yaml
@@ -41,6 +41,15 @@ DEFAULT_BOX_COLOR = (0.55, 0.42, 0.25)
 DEFAULT_PILLAR_COLOR = (0.35, 0.38, 0.40)
 DEFAULT_LIGHT_INTENSITY = 3500.0
 DEFAULT_LIGHT_COLOR = (0.80, 0.82, 0.85)
+DEFAULT_ROUTE_MARKING_COLOR = (0.95, 0.72, 0.18)
+DEFAULT_SAFETY_STRIPE_COLOR = (0.06, 0.07, 0.08)
+DEFAULT_LIGHT_FIXTURE_COLOR = (0.88, 0.92, 0.86)
+DEFAULT_TEXTURES_ENABLED = True
+DEFAULT_TEXTURE_ROOT = WORKSPACE_ROOT / "assets" / "textures" / "polyhaven"
+DEFAULT_FLOOR_TEXTURE_ID = "concrete_floor_worn_001"
+DEFAULT_WALL_TEXTURE_ID = "factory_wall"
+DEFAULT_BOX_TEXTURE_ID = "metal_plate"
+DEFAULT_PILLAR_TEXTURE_ID = "metal_plate"
 DEFAULT_SCENE_VARIANT = "warehouse"
 DEFAULT_HALLWAY_ARENA_SIZE_M = (12.0, 36.0)
 DEFAULT_HALLWAY_OBSTACLE_COUNT = 14
@@ -48,6 +57,7 @@ DEFAULT_HALLWAY_START_Y_M = -15.0
 DEFAULT_HALLWAY_GOAL_Y_M = 15.0
 DEFAULT_HALLWAY_LANE_X_RANGE_M = (-3.0, 3.0)
 DEFAULT_HALLWAY_OBSTACLE_X_RANGE_M = (-2.8, 2.8)
+DEFAULT_HALLWAY_CENTER_CLEARANCE_M = 0.0
 DEFAULT_HALLWAY_OBSTACLE_Y_MARGIN_M = 4.0
 DEFAULT_HALLWAY_OBSTACLE_SPACING_M = 2.2
 
@@ -80,12 +90,22 @@ class WarehouseSceneSettings:
     pillar_color: tuple[float, float, float] = DEFAULT_PILLAR_COLOR
     light_intensity: float = DEFAULT_LIGHT_INTENSITY
     light_color: tuple[float, float, float] = DEFAULT_LIGHT_COLOR
+    route_marking_color: tuple[float, float, float] = DEFAULT_ROUTE_MARKING_COLOR
+    safety_stripe_color: tuple[float, float, float] = DEFAULT_SAFETY_STRIPE_COLOR
+    light_fixture_color: tuple[float, float, float] = DEFAULT_LIGHT_FIXTURE_COLOR
+    textures_enabled: bool = DEFAULT_TEXTURES_ENABLED
+    texture_root: Path = DEFAULT_TEXTURE_ROOT
+    floor_texture_id: str = DEFAULT_FLOOR_TEXTURE_ID
+    wall_texture_id: str = DEFAULT_WALL_TEXTURE_ID
+    box_texture_id: str = DEFAULT_BOX_TEXTURE_ID
+    pillar_texture_id: str = DEFAULT_PILLAR_TEXTURE_ID
     hallway_arena_size_m: tuple[float, float] = DEFAULT_HALLWAY_ARENA_SIZE_M
     hallway_obstacle_count: int = DEFAULT_HALLWAY_OBSTACLE_COUNT
     hallway_start_y_m: float = DEFAULT_HALLWAY_START_Y_M
     hallway_goal_y_m: float = DEFAULT_HALLWAY_GOAL_Y_M
     hallway_lane_x_range_m: tuple[float, float] = DEFAULT_HALLWAY_LANE_X_RANGE_M
     hallway_obstacle_x_range_m: tuple[float, float] = DEFAULT_HALLWAY_OBSTACLE_X_RANGE_M
+    hallway_center_clearance_m: float = DEFAULT_HALLWAY_CENTER_CLEARANCE_M
     hallway_obstacle_y_margin_m: float = DEFAULT_HALLWAY_OBSTACLE_Y_MARGIN_M
     hallway_obstacle_spacing_m: float = DEFAULT_HALLWAY_OBSTACLE_SPACING_M
 
@@ -145,6 +165,21 @@ def _as_color(value: Any, default: tuple[float, float, float]) -> tuple[float, f
     if not isinstance(value, list | tuple) or len(value) != 3:
         return default
     return float(value[0]), float(value[1]), float(value[2])
+
+
+def _as_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return default
+
+
+def _as_texture_root(value: Any, default: Path) -> Path:
+    if not isinstance(value, str) or not value:
+        return default
+    path = Path(value)
+    return path if path.is_absolute() else WORKSPACE_ROOT / path
 
 
 def _scene_variant(value: Any, default: Literal["warehouse", "hallway"]) -> Literal["warehouse", "hallway"]:
@@ -213,6 +248,15 @@ def load_warehouse_scene_settings(config_path: Path | str = DEFAULT_CONFIG_PATH)
         pillar_color=_as_color(materials.get("pillar_color"), DEFAULT_PILLAR_COLOR),
         light_intensity=float(lighting.get("intensity", DEFAULT_LIGHT_INTENSITY)),
         light_color=_as_color(lighting.get("color"), DEFAULT_LIGHT_COLOR),
+        route_marking_color=_as_color(materials.get("route_marking_color"), DEFAULT_ROUTE_MARKING_COLOR),
+        safety_stripe_color=_as_color(materials.get("safety_stripe_color"), DEFAULT_SAFETY_STRIPE_COLOR),
+        light_fixture_color=_as_color(materials.get("light_fixture_color"), DEFAULT_LIGHT_FIXTURE_COLOR),
+        textures_enabled=_as_bool(materials.get("textures_enabled"), DEFAULT_TEXTURES_ENABLED),
+        texture_root=_as_texture_root(materials.get("texture_root"), DEFAULT_TEXTURE_ROOT),
+        floor_texture_id=str(materials.get("floor_texture_id", DEFAULT_FLOOR_TEXTURE_ID)),
+        wall_texture_id=str(materials.get("wall_texture_id", DEFAULT_WALL_TEXTURE_ID)),
+        box_texture_id=str(materials.get("box_texture_id", DEFAULT_BOX_TEXTURE_ID)),
+        pillar_texture_id=str(materials.get("pillar_texture_id", DEFAULT_PILLAR_TEXTURE_ID)),
         hallway_arena_size_m=_as_float_pair(hallway.get("arena_size_m"), DEFAULT_HALLWAY_ARENA_SIZE_M),
         hallway_obstacle_count=int(hallway.get("obstacle_count", DEFAULT_HALLWAY_OBSTACLE_COUNT)),
         hallway_start_y_m=float(hallway.get("start_y_m", DEFAULT_HALLWAY_START_Y_M)),
@@ -222,6 +266,9 @@ def load_warehouse_scene_settings(config_path: Path | str = DEFAULT_CONFIG_PATH)
         ),
         hallway_obstacle_x_range_m=_as_float_pair(
             hallway.get("obstacle_x_range_m"), DEFAULT_HALLWAY_OBSTACLE_X_RANGE_M
+        ),
+        hallway_center_clearance_m=float(
+            hallway.get("center_clearance_m", DEFAULT_HALLWAY_CENTER_CLEARANCE_M)
         ),
         hallway_obstacle_y_margin_m=float(
             hallway.get("obstacle_y_margin_m", DEFAULT_HALLWAY_OBSTACLE_Y_MARGIN_M)
@@ -352,12 +399,22 @@ def _with_hallway_arena(settings: WarehouseSceneSettings) -> WarehouseSceneSetti
         pillar_color=settings.pillar_color,
         light_intensity=settings.light_intensity,
         light_color=settings.light_color,
+        route_marking_color=settings.route_marking_color,
+        safety_stripe_color=settings.safety_stripe_color,
+        light_fixture_color=settings.light_fixture_color,
+        textures_enabled=settings.textures_enabled,
+        texture_root=settings.texture_root,
+        floor_texture_id=settings.floor_texture_id,
+        wall_texture_id=settings.wall_texture_id,
+        box_texture_id=settings.box_texture_id,
+        pillar_texture_id=settings.pillar_texture_id,
         hallway_arena_size_m=settings.hallway_arena_size_m,
         hallway_obstacle_count=settings.hallway_obstacle_count,
         hallway_start_y_m=settings.hallway_start_y_m,
         hallway_goal_y_m=settings.hallway_goal_y_m,
         hallway_lane_x_range_m=settings.hallway_lane_x_range_m,
         hallway_obstacle_x_range_m=settings.hallway_obstacle_x_range_m,
+        hallway_center_clearance_m=settings.hallway_center_clearance_m,
         hallway_obstacle_y_margin_m=settings.hallway_obstacle_y_margin_m,
         hallway_obstacle_spacing_m=settings.hallway_obstacle_spacing_m,
     )
@@ -371,11 +428,23 @@ def spawn_warehouse_scene(layout: WarehouseLayout | None = None) -> WarehouseLay
 
     import isaaclab.sim as sim_utils
 
-    light_cfg = sim_utils.DistantLightCfg(intensity=settings.light_intensity, color=settings.light_color)
+    light_cfg = sim_utils.DistantLightCfg(
+        intensity=settings.light_intensity,
+        color=settings.light_color,
+        angle=2.0,
+    )
     if not sim_utils.get_current_stage().GetPrimAtPath("/World/Light").IsValid():
         light_cfg.func("/World/Light", light_cfg)
 
-    floor_cfg = _make_cuboid_cfg(settings.arena_size_m + (settings.floor_thickness_m,), settings.floor_color)
+    floor_cfg = _make_cuboid_cfg(
+        settings.arena_size_m + (settings.floor_thickness_m,),
+        settings.floor_color,
+        roughness=0.82,
+        texture_id=settings.floor_texture_id,
+        texture_root=settings.texture_root,
+        textures_enabled=settings.textures_enabled,
+        texture_scale=(settings.arena_size_m[0] / 5.0, settings.arena_size_m[1] / 5.0),
+    )
     floor_cfg.func(
         f"{root}/Floor",
         floor_cfg,
@@ -383,14 +452,31 @@ def spawn_warehouse_scene(layout: WarehouseLayout | None = None) -> WarehouseLay
     )
 
     for name, size, translation in _wall_specs(settings):
-        wall_cfg = _make_cuboid_cfg(size, settings.wall_color)
+        wall_cfg = _make_cuboid_cfg(
+            size,
+            settings.wall_color,
+            roughness=0.68,
+            texture_id=settings.wall_texture_id,
+            texture_root=settings.texture_root,
+            textures_enabled=settings.textures_enabled,
+            texture_scale=_texture_scale_for_size(size, meters_per_tile=4.0),
+        )
         wall_cfg.func(f"{root}/{name}", wall_cfg, translation=translation)
 
     for primitive in scene_layout.obstacles:
         if primitive.kind == "box":
             if primitive.size is None:
                 raise ValueError(f"Box primitive {primitive.name} is missing size")
-            cfg = _make_cuboid_cfg(primitive.size, settings.box_color)
+            cfg = _make_cuboid_cfg(
+                primitive.size,
+                settings.box_color,
+                roughness=0.74,
+                metallic=0.28,
+                texture_id=settings.box_texture_id,
+                texture_root=settings.texture_root,
+                textures_enabled=settings.textures_enabled,
+                texture_scale=_texture_scale_for_size(primitive.size, meters_per_tile=2.0),
+            )
             cfg.func(
                 f"{root}/{primitive.name}",
                 cfg,
@@ -405,24 +491,341 @@ def spawn_warehouse_scene(layout: WarehouseLayout | None = None) -> WarehouseLay
                 height=primitive.height,
                 axis="Z",
                 collision_props=sim_utils.CollisionPropertiesCfg(),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=settings.pillar_color),
+                visual_material=_make_material_cfg(
+                    settings.pillar_color,
+                    roughness=0.46,
+                    metallic=0.35,
+                    texture_id=settings.pillar_texture_id,
+                    texture_root=settings.texture_root,
+                    textures_enabled=settings.textures_enabled,
+                    texture_scale=(1.0, max(1.0, primitive.height / 2.0)),
+                ),
             )
             cfg.func(f"{root}/{primitive.name}", cfg, translation=primitive.translation)
 
+    _spawn_visual_polish(
+        _visual_root_for(root),
+        settings,
+        scene_layout.start_position,
+        scene_layout.goal_position,
+    )
     return scene_layout
 
 
 def _make_cuboid_cfg(
     size: tuple[float, float, float],
     color: tuple[float, float, float],
+    *,
+    roughness: float = 0.55,
+    metallic: float = 0.0,
+    opacity: float = 1.0,
+    emissive_color: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    texture_id: str | None = None,
+    texture_root: Path = DEFAULT_TEXTURE_ROOT,
+    textures_enabled: bool = DEFAULT_TEXTURES_ENABLED,
+    texture_scale: tuple[float, float] = (1.0, 1.0),
 ) -> Any:
     import isaaclab.sim as sim_utils
 
     return sim_utils.CuboidCfg(
         size=size,
         collision_props=sim_utils.CollisionPropertiesCfg(),
-        visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
+        visual_material=_make_material_cfg(
+            color,
+            roughness=roughness,
+            metallic=metallic,
+            opacity=opacity,
+            emissive_color=emissive_color,
+            texture_id=texture_id,
+            texture_root=texture_root,
+            textures_enabled=textures_enabled,
+            texture_scale=texture_scale,
+        ),
     )
+
+
+def _make_material_cfg(
+    color: tuple[float, float, float],
+    *,
+    roughness: float,
+    metallic: float = 0.0,
+    opacity: float = 1.0,
+    emissive_color: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    texture_id: str | None = None,
+    texture_root: Path = DEFAULT_TEXTURE_ROOT,
+    textures_enabled: bool = DEFAULT_TEXTURES_ENABLED,
+    texture_scale: tuple[float, float] = (1.0, 1.0),
+) -> Any:
+    import isaaclab.sim as sim_utils
+
+    texture_set = _texture_set(texture_root, texture_id) if textures_enabled else None
+    if texture_set is not None:
+        return _OmniPbrTextureCfg(
+            diffuse_color=color,
+            diffuse_texture=texture_set.diffuse,
+            roughness=roughness,
+            roughness_texture=texture_set.roughness,
+            metallic=metallic,
+            normal_texture=texture_set.normal,
+            texture_scale=texture_scale,
+        )
+
+    return sim_utils.PreviewSurfaceCfg(
+        diffuse_color=color,
+        emissive_color=emissive_color,
+        roughness=roughness,
+        metallic=metallic,
+        opacity=opacity,
+    )
+
+
+@dataclass(frozen=True)
+class _TextureSet:
+    diffuse: str
+    roughness: str | None = None
+    normal: str | None = None
+
+
+@dataclass(frozen=True)
+class _OmniPbrTextureCfg:
+    func: Callable[[str, "_OmniPbrTextureCfg"], Any] = (
+        lambda prim_path, cfg: _spawn_omni_pbr_material(prim_path, cfg)
+    )
+    diffuse_color: tuple[float, float, float] = (0.5, 0.5, 0.5)
+    diffuse_texture: str = ""
+    roughness: float = 0.65
+    roughness_texture: str | None = None
+    metallic: float = 0.0
+    normal_texture: str | None = None
+    texture_scale: tuple[float, float] = (1.0, 1.0)
+
+
+def _texture_set(texture_root: Path, texture_id: str | None) -> _TextureSet | None:
+    if texture_id is None or not texture_id:
+        return None
+
+    root = texture_root / texture_id
+    diffuse = root / f"{texture_id}_diff_1k.jpg"
+    if not diffuse.exists():
+        return None
+
+    roughness = root / f"{texture_id}_rough_1k.jpg"
+    normal = root / f"{texture_id}_nor_gl_1k.jpg"
+    return _TextureSet(
+        diffuse=str(diffuse),
+        roughness=str(roughness) if roughness.exists() else None,
+        normal=str(normal) if normal.exists() else None,
+    )
+
+
+def _spawn_omni_pbr_material(prim_path: str, cfg: _OmniPbrTextureCfg) -> Any:
+    import omni.kit.commands
+    import omni.usd
+    from pxr import Gf, Sdf, UsdShade
+
+    import isaaclab.sim as sim_utils
+
+    stage = sim_utils.get_current_stage()
+    if not stage.GetPrimAtPath(prim_path).IsValid():
+        omni.kit.commands.execute(
+            "CreateMdlMaterialPrim",
+            mtl_url="OmniPBR.mdl",
+            mtl_name="OmniPBR",
+            mtl_path=prim_path,
+            select_new_prim=False,
+        )
+
+    material_prim = stage.GetPrimAtPath(prim_path)
+    shader_prim = stage.GetPrimAtPath(f"{prim_path}/Shader")
+    if not shader_prim.IsValid():
+        shader_prim = UsdShade.Shader(
+            omni.usd.get_shader_from_material(material_prim, get_prim=True)
+        ).GetPrim()
+    shader = UsdShade.Shader(shader_prim)
+
+    _set_shader_input(
+        shader,
+        "diffuse_color_constant",
+        Sdf.ValueTypeNames.Color3f,
+        Gf.Vec3f(*cfg.diffuse_color),
+    )
+    _set_shader_input(shader, "diffuse_texture", Sdf.ValueTypeNames.Asset, Sdf.AssetPath(cfg.diffuse_texture))
+    _set_shader_input(shader, "reflection_roughness_constant", Sdf.ValueTypeNames.Float, cfg.roughness)
+    _set_shader_input(shader, "metallic_constant", Sdf.ValueTypeNames.Float, cfg.metallic)
+    _set_shader_input(shader, "project_uvw", Sdf.ValueTypeNames.Bool, True)
+    _set_shader_input(shader, "texture_scale", Sdf.ValueTypeNames.Float2, Gf.Vec2f(*cfg.texture_scale))
+    if cfg.roughness_texture is not None:
+        _set_shader_input(
+            shader,
+            "reflectionroughness_texture",
+            Sdf.ValueTypeNames.Asset,
+            Sdf.AssetPath(cfg.roughness_texture),
+        )
+        _set_shader_input(shader, "reflection_roughness_texture_influence", Sdf.ValueTypeNames.Float, 0.75)
+    if cfg.normal_texture is not None:
+        _set_shader_input(shader, "normalmap_texture", Sdf.ValueTypeNames.Asset, Sdf.AssetPath(cfg.normal_texture))
+        _set_shader_input(shader, "bump_factor", Sdf.ValueTypeNames.Float, 0.18)
+
+    return shader_prim
+
+
+def _set_shader_input(shader: Any, name: str, value_type: Any, value: Any) -> None:
+    shader_input = shader.GetInput(name)
+    if not shader_input:
+        shader_input = shader.CreateInput(name, value_type)
+    shader_input.Set(value)
+
+
+def _texture_scale_for_size(size: tuple[float, float, float], meters_per_tile: float) -> tuple[float, float]:
+    ordered = sorted((abs(size[0]), abs(size[1]), abs(size[2])), reverse=True)
+    return max(1.0, ordered[0] / meters_per_tile), max(1.0, ordered[1] / meters_per_tile)
+
+
+def _spawn_visual_polish(
+    visual_root: str,
+    settings: WarehouseSceneSettings,
+    start: tuple[float, float, float],
+    goal: tuple[float, float, float],
+) -> None:
+    _spawn_route_markings(visual_root, settings, start, goal)
+    _spawn_wall_safety_bands(visual_root, settings)
+    _spawn_overhead_lights(visual_root, settings)
+
+
+def _spawn_route_markings(
+    root: str,
+    settings: WarehouseSceneSettings,
+    start: tuple[float, float, float],
+    goal: tuple[float, float, float],
+) -> None:
+    import math
+
+    route_length = _xy_distance(start, goal)
+    if route_length <= 1.0e-3:
+        return
+
+    center = ((start[0] + goal[0]) / 2.0, (start[1] + goal[1]) / 2.0, 0.012)
+    yaw = math.degrees(math.atan2(goal[1] - start[1], goal[0] - start[0]))
+    lateral_offsets = (-0.45, 0.45)
+    for index, offset in enumerate(lateral_offsets):
+        stripe_center = _offset_xy(center, yaw + 90.0, offset)
+        stripe_cfg = _make_visual_cuboid_cfg(
+            size=(route_length, 0.045, 0.012),
+            color=settings.route_marking_color,
+            roughness=0.88,
+        )
+        stripe_cfg.func(
+            f"{root}/VisualRouteStripe_{index:02d}",
+            stripe_cfg,
+            translation=stripe_center,
+            orientation=_yaw_quat(yaw),
+        )
+
+    for index, position in enumerate((start, goal)):
+        marker_cfg = _make_visual_cuboid_cfg(
+            size=(1.2, 0.08, 0.014),
+            color=settings.route_marking_color,
+            roughness=0.88,
+        )
+        for cross_index, cross_yaw in enumerate((0.0, 90.0)):
+            marker_cfg.func(
+                f"{root}/VisualEndpoint_{index:02d}_{cross_index:02d}",
+                marker_cfg,
+                translation=(position[0], position[1], 0.016),
+                orientation=_yaw_quat(cross_yaw),
+            )
+
+
+def _spawn_wall_safety_bands(root: str, settings: WarehouseSceneSettings) -> None:
+    arena_x, arena_y = settings.arena_size_m
+    z = 0.62
+    band_thickness = 0.026
+    band_height = 0.16
+    specs = (
+        ("North", (arena_x, band_thickness, band_height), (0.0, arena_y / 2.0 - 0.018, z), 0.0),
+        ("South", (arena_x, band_thickness, band_height), (0.0, -arena_y / 2.0 + 0.018, z), 0.0),
+        ("East", (arena_y, band_thickness, band_height), (arena_x / 2.0 - 0.018, 0.0, z), 90.0),
+        ("West", (arena_y, band_thickness, band_height), (-arena_x / 2.0 + 0.018, 0.0, z), 90.0),
+    )
+    for name, size, translation, yaw in specs:
+        cfg = _make_visual_cuboid_cfg(size, settings.safety_stripe_color, roughness=0.7)
+        cfg.func(f"{root}/VisualWallBand{name}", cfg, translation=translation, orientation=_yaw_quat(yaw))
+
+
+def _spawn_overhead_lights(root: str, settings: WarehouseSceneSettings) -> None:
+    arena_y = settings.arena_size_m[1]
+    fixture_y_positions = _fixture_y_positions(arena_y)
+    z = settings.wall_height_m - 0.18
+    for index, y in enumerate(fixture_y_positions):
+        fixture_cfg = _make_visual_cuboid_cfg(
+            size=(2.2, 0.16, 0.045),
+            color=settings.light_fixture_color,
+            roughness=0.2,
+            emissive_color=_scale_color(settings.light_fixture_color, 0.65),
+        )
+        fixture_cfg.func(
+            f"{root}/VisualLightFixture_{index:02d}",
+            fixture_cfg,
+            translation=(0.0, y, z),
+        )
+
+
+def _make_visual_cuboid_cfg(
+    size: tuple[float, float, float],
+    color: tuple[float, float, float],
+    *,
+    roughness: float,
+    metallic: float = 0.0,
+    emissive_color: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> Any:
+    import isaaclab.sim as sim_utils
+
+    return sim_utils.CuboidCfg(
+        size=size,
+        visual_material=sim_utils.PreviewSurfaceCfg(
+            diffuse_color=color,
+            emissive_color=emissive_color,
+            roughness=roughness,
+            metallic=metallic,
+        ),
+    )
+
+
+def _fixture_y_positions(arena_y: float) -> tuple[float, ...]:
+    if arena_y <= 18.0:
+        return (-arena_y * 0.25, arena_y * 0.25)
+    return (-arena_y * 0.33, 0.0, arena_y * 0.33)
+
+
+def _offset_xy(
+    center: tuple[float, float, float],
+    yaw_degrees: float,
+    distance_m: float,
+) -> tuple[float, float, float]:
+    import math
+
+    yaw = math.radians(yaw_degrees)
+    return (
+        center[0] + math.cos(yaw) * distance_m,
+        center[1] + math.sin(yaw) * distance_m,
+        center[2],
+    )
+
+
+def _scale_color(
+    color: tuple[float, float, float],
+    scale: float,
+) -> tuple[float, float, float]:
+    return tuple(min(1.0, max(0.0, channel * scale)) for channel in color)
+
+
+def _visual_root_for(root: str) -> str:
+    parts = [part for part in root.rstrip("/").split("/") if part]
+    if "envs" in parts:
+        env_index = parts.index("envs")
+        if env_index + 1 < len(parts):
+            return f"/World/Visuals/{parts[env_index + 1]}/Warehouse"
+    return "/World/Visuals/Warehouse"
 
 
 def _sample_box(
@@ -490,7 +893,7 @@ def _sample_hallway_box(
     min_spacing = max(settings.hallway_obstacle_spacing_m, settings.start_goal_clearance_m + footprint_radius)
 
     for _ in range(settings.sampling_attempts):
-        x = rng.uniform(x_min, x_max)
+        x = _sample_hallway_obstacle_x(rng, x_min, x_max, settings.hallway_center_clearance_m)
         y = rng.uniform(y_min, y_max)
         candidate = (x, y, settings.target_altitude_m)
         if all(_xy_distance(candidate, blocked) >= min_spacing for blocked in blocked_positions):
@@ -502,6 +905,17 @@ def _sample_hallway_box(
                 yaw_degrees=rng.uniform(*settings.box_yaw_range_degrees),
             )
     return None
+
+
+def _sample_hallway_obstacle_x(rng: Random, x_min: float, x_max: float, center_clearance_m: float) -> float:
+    clearance = max(0.0, center_clearance_m)
+    left = (x_min, min(x_max, -clearance))
+    right = (max(x_min, clearance), x_max)
+    bands = [band for band in (left, right) if band[0] < band[1]]
+    if not bands:
+        return rng.uniform(x_min, x_max)
+    low, high = rng.choice(bands)
+    return rng.uniform(low, high)
 
 
 def _sample_free_position(

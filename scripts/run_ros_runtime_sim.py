@@ -63,6 +63,12 @@ def parse_args() -> argparse.Namespace:
         help="Camera smoothing alpha in [0, 1]; 1 snaps to the target pose.",
     )
     parser.add_argument(
+        "--camera_max_yaw_rate_dps",
+        type=float,
+        default=90.0,
+        help="Maximum visible camera heading turn rate in degrees per second.",
+    )
+    parser.add_argument(
         "--scene_variant",
         choices=("warehouse", "hallway"),
         default="warehouse",
@@ -76,8 +82,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--demo_robot_marker_radius_m",
         type=float,
-        default=0.28,
-        help="Radius of the optional drone readability marker.",
+        default=0.16,
+        help="Half-length of the optional drone readability marker axes.",
     )
     parser.add_argument("--publish_rate_hz", type=float, default=50.0, help="ROS state/ray publish rate.")
     parser.add_argument(
@@ -290,23 +296,31 @@ class DemoCamera:
         self._height_m = args.camera_height_m
         self._target_height_m = args.camera_target_height_m
         self._smoothing = args.camera_smoothing
+        self._max_yaw_rate_rad_s = math.radians(args.camera_max_yaw_rate_dps)
         self._eye: torch.Tensor | None = None
         self._target: torch.Tensor | None = None
+        self._forward: torch.Tensor | None = None
+        self._last_update_wall_time = time.monotonic()
 
     def update(self, env: AeroStrikeNavigationEnv) -> None:
         """Update the active Isaac viewport camera."""
         if self._mode == "free":
             return
 
+        now = time.monotonic()
+        dt = max(1.0e-3, now - self._last_update_wall_time)
+        self._last_update_wall_time = now
         root_pos = env._robot.data.root_pos_w[0].detach().cpu()
         goal_pos = env._desired_pos_w[0].detach().cpu()
-        forward = goal_pos - root_pos
-        forward[2] = 0.0
-        norm = torch.linalg.norm(forward).item()
+        desired_forward = goal_pos - root_pos
+        desired_forward[2] = 0.0
+        norm = torch.linalg.norm(desired_forward).item()
         if norm < 1.0e-4:
-            forward = torch.tensor((0.0, 1.0, 0.0), dtype=torch.float)
+            desired_forward = torch.tensor((0.0, 1.0, 0.0), dtype=torch.float)
         else:
-            forward = forward / norm
+            desired_forward = desired_forward / norm
+
+        forward = self._limit_forward_yaw(desired_forward, dt)
 
         if self._mode == "third_person":
             desired_eye = root_pos - forward * self._distance_m
@@ -329,26 +343,66 @@ class DemoCamera:
 
         env.sim.set_camera_view(eye=self._eye.tolist(), target=self._target.tolist())
 
+    def _limit_forward_yaw(self, desired_forward: torch.Tensor, dt: float) -> torch.Tensor:
+        if self._forward is None:
+            self._forward = desired_forward
+            return desired_forward
+
+        current_yaw = math.atan2(float(self._forward[1]), float(self._forward[0]))
+        desired_yaw = math.atan2(float(desired_forward[1]), float(desired_forward[0]))
+        yaw_error = math.atan2(math.sin(desired_yaw - current_yaw), math.cos(desired_yaw - current_yaw))
+        max_delta = max(0.0, self._max_yaw_rate_rad_s) * dt
+        yaw_delta = max(-max_delta, min(max_delta, yaw_error))
+        yaw = current_yaw + yaw_delta
+        self._forward = torch.tensor((math.cos(yaw), math.sin(yaw), 0.0), dtype=torch.float)
+        return self._forward
+
 
 class DemoRobotMarker:
     """Non-physics visual marker that makes the small Crazyflie readable on video."""
 
     def __init__(self, radius_m: float) -> None:
+        axis_thickness_m = max(0.018, radius_m * 0.18)
         marker_cfg = VisualizationMarkersCfg(
             prim_path="/Visuals/AeroStrikeDroneMarker",
             markers={
-                "drone": sim_utils.SphereCfg(
-                    radius=radius_m,
-                    visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.8, 1.0)),
-                )
+                "marker_x": sim_utils.CuboidCfg(
+                    size=(radius_m * 2.0, axis_thickness_m, axis_thickness_m),
+                    visual_material=sim_utils.PreviewSurfaceCfg(
+                        diffuse_color=(0.0, 0.85, 1.0),
+                        emissive_color=(0.0, 0.18, 0.25),
+                        roughness=0.35,
+                    ),
+                ),
+                "marker_y": sim_utils.CuboidCfg(
+                    size=(axis_thickness_m, radius_m * 2.0, axis_thickness_m),
+                    visual_material=sim_utils.PreviewSurfaceCfg(
+                        diffuse_color=(1.0, 0.52, 0.12),
+                        emissive_color=(0.22, 0.08, 0.0),
+                        roughness=0.35,
+                    ),
+                ),
+                "marker_z": sim_utils.CuboidCfg(
+                    size=(axis_thickness_m, axis_thickness_m, radius_m * 1.6),
+                    visual_material=sim_utils.PreviewSurfaceCfg(
+                        diffuse_color=(0.95, 0.95, 0.92),
+                        emissive_color=(0.16, 0.16, 0.14),
+                        roughness=0.35,
+                    ),
+                ),
             },
         )
         self._visualizer = VisualizationMarkers(marker_cfg)
 
     def update(self, env: AeroStrikeNavigationEnv) -> None:
-        position = env._robot.data.root_pos_w[0:1].detach().cpu()
-        orientation = env._robot.data.root_quat_w[0:1].detach().cpu()
-        self._visualizer.visualize(position, orientation)
+        position = env._robot.data.root_pos_w[0].detach().cpu()
+        positions = position.repeat((3, 1))
+        orientations = env._robot.data.root_quat_w[0].detach().cpu().repeat((3, 1))
+        self._visualizer.visualize(
+            positions,
+            orientations,
+            marker_indices=torch.tensor((0, 1, 2), dtype=torch.int32),
+        )
 
 
 def make_env(args: argparse.Namespace) -> AeroStrikeNavigationEnv:
@@ -378,6 +432,8 @@ def main() -> None:
         raise ValueError("--camera_height_m must be positive")
     if args_cli.camera_smoothing < 0.0 or args_cli.camera_smoothing > 1.0:
         raise ValueError("--camera_smoothing must be in [0, 1]")
+    if args_cli.camera_max_yaw_rate_dps <= 0.0:
+        raise ValueError("--camera_max_yaw_rate_dps must be positive")
     if args_cli.demo_robot_marker_radius_m <= 0.0:
         raise ValueError("--demo_robot_marker_radius_m must be positive")
 

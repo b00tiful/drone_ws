@@ -31,7 +31,7 @@ warehouse:
     textures_enabled: true
     texture_root: "assets/textures/polyhaven"
     floor_texture_id: "concrete_floor_worn_001"
-    wall_texture_id: "factory_wall"
+    wall_texture_id: "concrete_floor_worn_001"
     box_texture_id: "metal_plate"
     pillar_texture_id: "metal_plate"
   lighting:

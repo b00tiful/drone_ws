@@ -44,6 +44,8 @@ DEFAULT_LIGHT_COLOR = (0.80, 0.82, 0.85)
 DEFAULT_ROUTE_MARKING_COLOR = (0.95, 0.72, 0.18)
 DEFAULT_SAFETY_STRIPE_COLOR = (0.06, 0.07, 0.08)
 DEFAULT_LIGHT_FIXTURE_COLOR = (0.88, 0.92, 0.86)
+DEFAULT_SIDE_CLUTTER_COLOR = (0.30, 0.25, 0.18)
+DEFAULT_CEILING_BEAM_COLOR = (0.18, 0.20, 0.21)
 DEFAULT_TEXTURES_ENABLED = True
 DEFAULT_TEXTURE_ROOT = WORKSPACE_ROOT / "assets" / "textures" / "polyhaven"
 DEFAULT_FLOOR_TEXTURE_ID = "concrete_floor_worn_001"
@@ -60,6 +62,13 @@ DEFAULT_HALLWAY_OBSTACLE_X_RANGE_M = (-2.8, 2.8)
 DEFAULT_HALLWAY_CENTER_CLEARANCE_M = 0.0
 DEFAULT_HALLWAY_OBSTACLE_Y_MARGIN_M = 4.0
 DEFAULT_HALLWAY_OBSTACLE_SPACING_M = 2.2
+DEFAULT_VISUAL_SIDE_CLUTTER_COUNT = 0
+DEFAULT_VISUAL_SIDE_CLUTTER_SIZE_M = (0.72, 0.48, 0.42)
+DEFAULT_VISUAL_SIDE_CLUTTER_MARGIN_M = 0.85
+DEFAULT_VISUAL_CEILING_BEAM_COUNT = 0
+DEFAULT_VISUAL_CEILING_BEAM_DEPTH_M = 0.08
+DEFAULT_VISUAL_CEILING_BEAM_HEIGHT_M = 0.06
+DEFAULT_VISUAL_CEILING_BEAM_TOP_OFFSET_M = 0.06
 
 
 @dataclass(frozen=True)
@@ -93,6 +102,8 @@ class WarehouseSceneSettings:
     route_marking_color: tuple[float, float, float] = DEFAULT_ROUTE_MARKING_COLOR
     safety_stripe_color: tuple[float, float, float] = DEFAULT_SAFETY_STRIPE_COLOR
     light_fixture_color: tuple[float, float, float] = DEFAULT_LIGHT_FIXTURE_COLOR
+    side_clutter_color: tuple[float, float, float] = DEFAULT_SIDE_CLUTTER_COLOR
+    ceiling_beam_color: tuple[float, float, float] = DEFAULT_CEILING_BEAM_COLOR
     textures_enabled: bool = DEFAULT_TEXTURES_ENABLED
     texture_root: Path = DEFAULT_TEXTURE_ROOT
     floor_texture_id: str = DEFAULT_FLOOR_TEXTURE_ID
@@ -108,6 +119,13 @@ class WarehouseSceneSettings:
     hallway_center_clearance_m: float = DEFAULT_HALLWAY_CENTER_CLEARANCE_M
     hallway_obstacle_y_margin_m: float = DEFAULT_HALLWAY_OBSTACLE_Y_MARGIN_M
     hallway_obstacle_spacing_m: float = DEFAULT_HALLWAY_OBSTACLE_SPACING_M
+    visual_side_clutter_count: int = DEFAULT_VISUAL_SIDE_CLUTTER_COUNT
+    visual_side_clutter_size_m: tuple[float, float, float] = DEFAULT_VISUAL_SIDE_CLUTTER_SIZE_M
+    visual_side_clutter_margin_m: float = DEFAULT_VISUAL_SIDE_CLUTTER_MARGIN_M
+    visual_ceiling_beam_count: int = DEFAULT_VISUAL_CEILING_BEAM_COUNT
+    visual_ceiling_beam_depth_m: float = DEFAULT_VISUAL_CEILING_BEAM_DEPTH_M
+    visual_ceiling_beam_height_m: float = DEFAULT_VISUAL_CEILING_BEAM_HEIGHT_M
+    visual_ceiling_beam_top_offset_m: float = DEFAULT_VISUAL_CEILING_BEAM_TOP_OFFSET_M
 
 
 @dataclass(frozen=True)
@@ -152,6 +170,12 @@ def _as_float_pair(value: Any, default: tuple[float, float]) -> tuple[float, flo
     if not isinstance(value, list | tuple) or len(value) != 2:
         return default
     return float(value[0]), float(value[1])
+
+
+def _as_float_triple(value: Any, default: tuple[float, float, float]) -> tuple[float, float, float]:
+    if not isinstance(value, list | tuple) or len(value) != 3:
+        return default
+    return float(value[0]), float(value[1]), float(value[2])
 
 
 def _as_int_pair(value: Any, default: tuple[int, int]) -> tuple[int, int]:
@@ -210,6 +234,9 @@ def load_warehouse_scene_settings(config_path: Path | str = DEFAULT_CONFIG_PATH)
     hallway = warehouse.get("hallway", {})
     if not isinstance(hallway, dict):
         hallway = {}
+    visuals = warehouse.get("visuals", {})
+    if not isinstance(visuals, dict):
+        visuals = {}
 
     return WarehouseSceneSettings(
         scene_variant=_scene_variant(warehouse.get("scene_variant"), DEFAULT_SCENE_VARIANT),
@@ -251,6 +278,8 @@ def load_warehouse_scene_settings(config_path: Path | str = DEFAULT_CONFIG_PATH)
         route_marking_color=_as_color(materials.get("route_marking_color"), DEFAULT_ROUTE_MARKING_COLOR),
         safety_stripe_color=_as_color(materials.get("safety_stripe_color"), DEFAULT_SAFETY_STRIPE_COLOR),
         light_fixture_color=_as_color(materials.get("light_fixture_color"), DEFAULT_LIGHT_FIXTURE_COLOR),
+        side_clutter_color=_as_color(materials.get("side_clutter_color"), DEFAULT_SIDE_CLUTTER_COLOR),
+        ceiling_beam_color=_as_color(materials.get("ceiling_beam_color"), DEFAULT_CEILING_BEAM_COLOR),
         textures_enabled=_as_bool(materials.get("textures_enabled"), DEFAULT_TEXTURES_ENABLED),
         texture_root=_as_texture_root(materials.get("texture_root"), DEFAULT_TEXTURE_ROOT),
         floor_texture_id=str(materials.get("floor_texture_id", DEFAULT_FLOOR_TEXTURE_ID)),
@@ -275,6 +304,27 @@ def load_warehouse_scene_settings(config_path: Path | str = DEFAULT_CONFIG_PATH)
         ),
         hallway_obstacle_spacing_m=float(
             hallway.get("obstacle_spacing_m", DEFAULT_HALLWAY_OBSTACLE_SPACING_M)
+        ),
+        visual_side_clutter_count=max(
+            0, int(visuals.get("side_clutter_count", DEFAULT_VISUAL_SIDE_CLUTTER_COUNT))
+        ),
+        visual_side_clutter_size_m=_as_float_triple(
+            visuals.get("side_clutter_size_m"), DEFAULT_VISUAL_SIDE_CLUTTER_SIZE_M
+        ),
+        visual_side_clutter_margin_m=float(
+            visuals.get("side_clutter_margin_m", DEFAULT_VISUAL_SIDE_CLUTTER_MARGIN_M)
+        ),
+        visual_ceiling_beam_count=max(
+            0, int(visuals.get("ceiling_beam_count", DEFAULT_VISUAL_CEILING_BEAM_COUNT))
+        ),
+        visual_ceiling_beam_depth_m=float(
+            visuals.get("ceiling_beam_depth_m", DEFAULT_VISUAL_CEILING_BEAM_DEPTH_M)
+        ),
+        visual_ceiling_beam_height_m=float(
+            visuals.get("ceiling_beam_height_m", DEFAULT_VISUAL_CEILING_BEAM_HEIGHT_M)
+        ),
+        visual_ceiling_beam_top_offset_m=float(
+            visuals.get("ceiling_beam_top_offset_m", DEFAULT_VISUAL_CEILING_BEAM_TOP_OFFSET_M)
         ),
     )
 
@@ -402,6 +452,8 @@ def _with_hallway_arena(settings: WarehouseSceneSettings) -> WarehouseSceneSetti
         route_marking_color=settings.route_marking_color,
         safety_stripe_color=settings.safety_stripe_color,
         light_fixture_color=settings.light_fixture_color,
+        side_clutter_color=settings.side_clutter_color,
+        ceiling_beam_color=settings.ceiling_beam_color,
         textures_enabled=settings.textures_enabled,
         texture_root=settings.texture_root,
         floor_texture_id=settings.floor_texture_id,
@@ -417,6 +469,13 @@ def _with_hallway_arena(settings: WarehouseSceneSettings) -> WarehouseSceneSetti
         hallway_center_clearance_m=settings.hallway_center_clearance_m,
         hallway_obstacle_y_margin_m=settings.hallway_obstacle_y_margin_m,
         hallway_obstacle_spacing_m=settings.hallway_obstacle_spacing_m,
+        visual_side_clutter_count=settings.visual_side_clutter_count,
+        visual_side_clutter_size_m=settings.visual_side_clutter_size_m,
+        visual_side_clutter_margin_m=settings.visual_side_clutter_margin_m,
+        visual_ceiling_beam_count=settings.visual_ceiling_beam_count,
+        visual_ceiling_beam_depth_m=settings.visual_ceiling_beam_depth_m,
+        visual_ceiling_beam_height_m=settings.visual_ceiling_beam_height_m,
+        visual_ceiling_beam_top_offset_m=settings.visual_ceiling_beam_top_offset_m,
     )
 
 
@@ -506,6 +565,7 @@ def spawn_warehouse_scene(layout: WarehouseLayout | None = None) -> WarehouseLay
     _spawn_visual_polish(
         _visual_root_for(root),
         settings,
+        scene_layout.seed,
         scene_layout.start_position,
         scene_layout.goal_position,
     )
@@ -684,12 +744,16 @@ def _texture_scale_for_size(size: tuple[float, float, float], meters_per_tile: f
 def _spawn_visual_polish(
     visual_root: str,
     settings: WarehouseSceneSettings,
+    seed: int,
     start: tuple[float, float, float],
     goal: tuple[float, float, float],
 ) -> None:
     _spawn_route_markings(visual_root, settings, start, goal)
     _spawn_wall_safety_bands(visual_root, settings)
     _spawn_overhead_lights(visual_root, settings)
+    if settings.scene_variant == "hallway":
+        _spawn_ceiling_beams(visual_root, settings)
+        _spawn_side_clutter(visual_root, settings, seed)
 
 
 def _spawn_route_markings(
@@ -770,6 +834,75 @@ def _spawn_overhead_lights(root: str, settings: WarehouseSceneSettings) -> None:
         )
 
 
+def _spawn_ceiling_beams(root: str, settings: WarehouseSceneSettings) -> None:
+    if settings.visual_ceiling_beam_count <= 0:
+        return
+
+    arena_x, arena_y = settings.arena_size_m
+    z = settings.wall_height_m - settings.visual_ceiling_beam_top_offset_m
+    y_positions = _even_positions(
+        count=settings.visual_ceiling_beam_count,
+        low=-arena_y / 2.0 + settings.wall_thickness_m,
+        high=arena_y / 2.0 - settings.wall_thickness_m,
+    )
+    for index, y in enumerate(y_positions):
+        beam_cfg = _make_visual_cuboid_cfg(
+            size=(
+                arena_x + 2.0 * settings.wall_thickness_m,
+                settings.visual_ceiling_beam_depth_m,
+                settings.visual_ceiling_beam_height_m,
+            ),
+            color=settings.ceiling_beam_color,
+            roughness=0.58,
+            metallic=0.18,
+        )
+        beam_cfg.func(
+            f"{root}/VisualCeilingBeam_{index:02d}",
+            beam_cfg,
+            translation=(0.0, y, z),
+        )
+
+
+def _spawn_side_clutter(root: str, settings: WarehouseSceneSettings, seed: int) -> None:
+    if settings.visual_side_clutter_count <= 0:
+        return
+
+    import math
+
+    rng = Random(seed + 9173)
+    arena_x, arena_y = settings.arena_size_m
+    base_size = settings.visual_side_clutter_size_m
+    usable_y = arena_y - 2.0 * settings.boundary_margin_m
+    if usable_y <= 0.0:
+        return
+
+    for index in range(settings.visual_side_clutter_count):
+        side = -1.0 if index % 2 == 0 else 1.0
+        row = index // 2
+        row_fraction = (row + 0.5) / max(1, math.ceil(settings.visual_side_clutter_count / 2.0))
+        y = -usable_y / 2.0 + row_fraction * usable_y + rng.uniform(-0.35, 0.35)
+        x = side * (arena_x / 2.0 - settings.visual_side_clutter_margin_m)
+        size = (
+            base_size[0] * rng.uniform(0.85, 1.25),
+            base_size[1] * rng.uniform(0.85, 1.35),
+            base_size[2] * rng.uniform(0.75, 1.45),
+        )
+        yaw = 90.0 if side < 0.0 else -90.0
+        yaw += rng.uniform(-8.0, 8.0)
+        cfg = _make_visual_cuboid_cfg(
+            size=size,
+            color=_scale_color(settings.side_clutter_color, rng.uniform(0.86, 1.12)),
+            roughness=0.76,
+            metallic=0.05,
+        )
+        cfg.func(
+            f"{root}/VisualSideClutter_{index:02d}",
+            cfg,
+            translation=(x, y, size[2] / 2.0),
+            orientation=_yaw_quat(yaw),
+        )
+
+
 def _make_visual_cuboid_cfg(
     size: tuple[float, float, float],
     color: tuple[float, float, float],
@@ -795,6 +928,16 @@ def _fixture_y_positions(arena_y: float) -> tuple[float, ...]:
     if arena_y <= 18.0:
         return (-arena_y * 0.25, arena_y * 0.25)
     return (-arena_y * 0.33, 0.0, arena_y * 0.33)
+
+
+def _even_positions(count: int, low: float, high: float) -> tuple[float, ...]:
+    if count <= 0 or low >= high:
+        return ()
+    if count == 1:
+        return ((low + high) / 2.0,)
+
+    step = (high - low) / float(count - 1)
+    return tuple(low + index * step for index in range(count))
 
 
 def _offset_xy(

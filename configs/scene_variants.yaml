@@ -28,6 +28,8 @@ warehouse:
     route_marking_color: [0.95, 0.72, 0.18]
     safety_stripe_color: [0.05, 0.06, 0.06]
     light_fixture_color: [0.86, 0.91, 0.84]
+    side_clutter_color: [0.30, 0.25, 0.18]
+    ceiling_beam_color: [0.18, 0.20, 0.21]
     textures_enabled: true
     texture_root: "assets/textures/polyhaven"
     floor_texture_id: "concrete_floor_worn_001"
@@ -37,6 +39,14 @@ warehouse:
   lighting:
     intensity: 4200.0
     color: [0.86, 0.88, 0.90]
+  visuals:
+    side_clutter_count: 12
+    side_clutter_size_m: [0.72, 0.48, 0.42]
+    side_clutter_margin_m: 0.85
+    ceiling_beam_count: 7
+    ceiling_beam_depth_m: 0.08
+    ceiling_beam_height_m: 0.06
+    ceiling_beam_top_offset_m: 0.06
   hallway:
     arena_size_m: [12.0, 24.0]
     obstacle_count: 8

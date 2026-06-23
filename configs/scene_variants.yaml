@@ -37,9 +37,10 @@ warehouse:
     box_texture_id: "metal_plate"
     pillar_texture_id: "metal_plate"
   lighting:
-    intensity: 4200.0
-    color: [0.86, 0.88, 0.90]
+    intensity: 1800.0
+    color: [0.72, 0.78, 0.86]
   visuals:
+    mode: "cinematic"
     side_clutter_count: 12
     side_clutter_size_m: [0.72, 0.48, 0.42]
     side_clutter_margin_m: 0.85
@@ -47,6 +48,30 @@ warehouse:
     ceiling_beam_depth_m: 0.08
     ceiling_beam_height_m: 0.06
     ceiling_beam_top_offset_m: 0.06
+    models:
+      asset_root: "assets/models/kenney_factory_kit"
+      usd_cache_dir: "assets/models/kenney_factory_kit/usd_cache"
+      count: 24
+      scale: 0.42
+      side_margin_m: 0.72
+      route_clearance_m: 1.75
+      assets:
+        - { asset: "conveyor-long-stripe-sides", count: 3, scale: 0.42 }
+        - { asset: "conveyor-bars-stripe-fence", count: 2, scale: 0.40 }
+        - { asset: "machine-window", count: 2, scale: 0.42 }
+        - { asset: "machine-fortified", count: 2, scale: 0.42 }
+        - { asset: "machine-bed", count: 1, scale: 0.38 }
+        - { asset: "structure-yellow-high", count: 2, scale: 0.44 }
+        - { asset: "structure-window-wide", count: 1, scale: 0.44 }
+        - { asset: "robot-arm-a", count: 1, scale: 0.34 }
+        - { asset: "crane", count: 1, scale: 0.34 }
+        - { asset: "crane-lift", count: 1, scale: 0.34 }
+        - { asset: "pipe-large-valve", count: 1, scale: 0.36 }
+        - { asset: "scanner-high", count: 1, scale: 0.38 }
+        - { asset: "screen-panel-wide", count: 1, scale: 0.42 }
+        - { asset: "warning-traffic", count: 1, scale: 0.42 }
+        - { asset: "box-large", count: 2, scale: 0.48 }
+        - { asset: "box-wide", count: 2, scale: 0.48 }
   hallway:
     arena_size_m: [12.0, 24.0]
     obstacle_count: 8

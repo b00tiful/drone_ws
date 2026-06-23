@@ -69,6 +69,22 @@ DEFAULT_VISUAL_CEILING_BEAM_COUNT = 0
 DEFAULT_VISUAL_CEILING_BEAM_DEPTH_M = 0.08
 DEFAULT_VISUAL_CEILING_BEAM_HEIGHT_M = 0.06
 DEFAULT_VISUAL_CEILING_BEAM_TOP_OFFSET_M = 0.06
+DEFAULT_VISUAL_MODE = "cinematic"
+DEFAULT_VISUAL_MODEL_ASSET_ROOT = WORKSPACE_ROOT / "assets" / "models" / "kenney_factory_kit"
+DEFAULT_VISUAL_MODEL_USD_CACHE_DIR = DEFAULT_VISUAL_MODEL_ASSET_ROOT / "usd_cache"
+DEFAULT_VISUAL_MODEL_COUNT = 0
+DEFAULT_VISUAL_MODEL_SCALE = 0.42
+DEFAULT_VISUAL_MODEL_SIDE_MARGIN_M = 0.62
+DEFAULT_VISUAL_MODEL_ROUTE_CLEARANCE_M = 1.65
+
+
+@dataclass(frozen=True)
+class VisualModelSpec:
+    """YAML-backed visual-only model placement spec."""
+
+    asset: str
+    count: int
+    scale: float
 
 
 @dataclass(frozen=True)
@@ -126,6 +142,14 @@ class WarehouseSceneSettings:
     visual_ceiling_beam_depth_m: float = DEFAULT_VISUAL_CEILING_BEAM_DEPTH_M
     visual_ceiling_beam_height_m: float = DEFAULT_VISUAL_CEILING_BEAM_HEIGHT_M
     visual_ceiling_beam_top_offset_m: float = DEFAULT_VISUAL_CEILING_BEAM_TOP_OFFSET_M
+    visual_mode: Literal["cinematic", "bright"] = DEFAULT_VISUAL_MODE
+    visual_model_asset_root: Path = DEFAULT_VISUAL_MODEL_ASSET_ROOT
+    visual_model_usd_cache_dir: Path = DEFAULT_VISUAL_MODEL_USD_CACHE_DIR
+    visual_model_count: int = DEFAULT_VISUAL_MODEL_COUNT
+    visual_model_scale: float = DEFAULT_VISUAL_MODEL_SCALE
+    visual_model_side_margin_m: float = DEFAULT_VISUAL_MODEL_SIDE_MARGIN_M
+    visual_model_route_clearance_m: float = DEFAULT_VISUAL_MODEL_ROUTE_CLEARANCE_M
+    visual_model_specs: tuple[VisualModelSpec, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -206,11 +230,46 @@ def _as_texture_root(value: Any, default: Path) -> Path:
     return path if path.is_absolute() else WORKSPACE_ROOT / path
 
 
+def _as_workspace_path(value: Any, default: Path) -> Path:
+    if not isinstance(value, str) or not value:
+        return default
+    path = Path(value)
+    return path if path.is_absolute() else WORKSPACE_ROOT / path
+
+
 def _scene_variant(value: Any, default: Literal["warehouse", "hallway"]) -> Literal["warehouse", "hallway"]:
     variant = str(value or default)
     if variant not in ("warehouse", "hallway"):
         return default
     return variant
+
+
+def _visual_mode(value: Any, default: Literal["cinematic", "bright"]) -> Literal["cinematic", "bright"]:
+    mode = str(value or default)
+    if mode not in ("cinematic", "bright"):
+        return default
+    return mode
+
+
+def _visual_model_specs(value: Any, default_scale: float) -> tuple[VisualModelSpec, ...]:
+    if not isinstance(value, list):
+        return ()
+
+    specs: list[VisualModelSpec] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        asset = str(item.get("asset", "")).strip()
+        if not asset:
+            continue
+        count = max(0, int(item.get("count", 0)))
+        if count <= 0:
+            continue
+        scale = float(item.get("scale", default_scale))
+        if scale <= 0.0:
+            continue
+        specs.append(VisualModelSpec(asset=asset, count=count, scale=scale))
+    return tuple(specs)
 
 
 def load_warehouse_scene_settings(config_path: Path | str = DEFAULT_CONFIG_PATH) -> WarehouseSceneSettings:
@@ -237,6 +296,10 @@ def load_warehouse_scene_settings(config_path: Path | str = DEFAULT_CONFIG_PATH)
     visuals = warehouse.get("visuals", {})
     if not isinstance(visuals, dict):
         visuals = {}
+    models = visuals.get("models", {})
+    if not isinstance(models, dict):
+        models = {}
+    model_scale = float(models.get("scale", DEFAULT_VISUAL_MODEL_SCALE))
 
     return WarehouseSceneSettings(
         scene_variant=_scene_variant(warehouse.get("scene_variant"), DEFAULT_SCENE_VARIANT),
@@ -326,6 +389,20 @@ def load_warehouse_scene_settings(config_path: Path | str = DEFAULT_CONFIG_PATH)
         visual_ceiling_beam_top_offset_m=float(
             visuals.get("ceiling_beam_top_offset_m", DEFAULT_VISUAL_CEILING_BEAM_TOP_OFFSET_M)
         ),
+        visual_mode=_visual_mode(visuals.get("mode"), DEFAULT_VISUAL_MODE),
+        visual_model_asset_root=_as_workspace_path(models.get("asset_root"), DEFAULT_VISUAL_MODEL_ASSET_ROOT),
+        visual_model_usd_cache_dir=_as_workspace_path(
+            models.get("usd_cache_dir"), DEFAULT_VISUAL_MODEL_USD_CACHE_DIR
+        ),
+        visual_model_count=max(0, int(models.get("count", DEFAULT_VISUAL_MODEL_COUNT))),
+        visual_model_scale=model_scale,
+        visual_model_side_margin_m=float(
+            models.get("side_margin_m", DEFAULT_VISUAL_MODEL_SIDE_MARGIN_M)
+        ),
+        visual_model_route_clearance_m=float(
+            models.get("route_clearance_m", DEFAULT_VISUAL_MODEL_ROUTE_CLEARANCE_M)
+        ),
+        visual_model_specs=_visual_model_specs(models.get("assets"), model_scale),
     )
 
 
@@ -476,6 +553,14 @@ def _with_hallway_arena(settings: WarehouseSceneSettings) -> WarehouseSceneSetti
         visual_ceiling_beam_depth_m=settings.visual_ceiling_beam_depth_m,
         visual_ceiling_beam_height_m=settings.visual_ceiling_beam_height_m,
         visual_ceiling_beam_top_offset_m=settings.visual_ceiling_beam_top_offset_m,
+        visual_mode=settings.visual_mode,
+        visual_model_asset_root=settings.visual_model_asset_root,
+        visual_model_usd_cache_dir=settings.visual_model_usd_cache_dir,
+        visual_model_count=settings.visual_model_count,
+        visual_model_scale=settings.visual_model_scale,
+        visual_model_side_margin_m=settings.visual_model_side_margin_m,
+        visual_model_route_clearance_m=settings.visual_model_route_clearance_m,
+        visual_model_specs=settings.visual_model_specs,
     )
 
 
@@ -754,6 +839,7 @@ def _spawn_visual_polish(
     if settings.scene_variant == "hallway":
         _spawn_ceiling_beams(visual_root, settings)
         _spawn_side_clutter(visual_root, settings, seed)
+        _spawn_cinematic_models(visual_root, settings, seed)
 
 
 def _spawn_route_markings(
@@ -820,12 +906,14 @@ def _spawn_overhead_lights(root: str, settings: WarehouseSceneSettings) -> None:
     arena_y = settings.arena_size_m[1]
     fixture_y_positions = _fixture_y_positions(arena_y)
     z = settings.wall_height_m - 0.18
+    emissive_scale = 1.1 if settings.visual_mode == "cinematic" else 0.65
     for index, y in enumerate(fixture_y_positions):
+        flicker = 0.72 if settings.visual_mode == "cinematic" and index % 2 == 1 else 1.0
         fixture_cfg = _make_visual_cuboid_cfg(
             size=(2.2, 0.16, 0.045),
-            color=settings.light_fixture_color,
+            color=_scale_color(settings.light_fixture_color, flicker),
             roughness=0.2,
-            emissive_color=_scale_color(settings.light_fixture_color, 0.65),
+            emissive_color=_scale_color(settings.light_fixture_color, emissive_scale * flicker),
         )
         fixture_cfg.func(
             f"{root}/VisualLightFixture_{index:02d}",
@@ -901,6 +989,110 @@ def _spawn_side_clutter(root: str, settings: WarehouseSceneSettings, seed: int) 
             translation=(x, y, size[2] / 2.0),
             orientation=_yaw_quat(yaw),
         )
+
+
+def _spawn_cinematic_models(root: str, settings: WarehouseSceneSettings, seed: int) -> None:
+    if settings.visual_model_count <= 0 or not settings.visual_model_specs:
+        return
+
+    import isaaclab.sim as sim_utils
+    from isaaclab.sim.converters import MeshConverter, MeshConverterCfg
+
+    placements = _cinematic_model_placements(settings, seed)
+    if not placements:
+        return
+
+    usd_paths: dict[str, str] = {}
+    for spec in settings.visual_model_specs:
+        source = settings.visual_model_asset_root / "fbx" / f"{spec.asset}.fbx"
+        if not source.exists():
+            continue
+        converter = MeshConverter(
+            MeshConverterCfg(
+                asset_path=str(source),
+                usd_dir=str(settings.visual_model_usd_cache_dir / spec.asset),
+                usd_file_name=f"{spec.asset}.usd",
+                scale=(spec.scale, spec.scale, spec.scale),
+                make_instanceable=True,
+            )
+        )
+        usd_paths[spec.asset] = converter.usd_path
+
+    if not usd_paths:
+        return
+
+    weighted_assets = [
+        spec.asset
+        for spec in settings.visual_model_specs
+        for _ in range(spec.count)
+        if spec.asset in usd_paths
+    ]
+    if not weighted_assets:
+        return
+
+    rng = Random(seed + 29011)
+    for index, placement in enumerate(placements):
+        asset = weighted_assets[index % len(weighted_assets)]
+        cfg = sim_utils.UsdFileCfg(usd_path=usd_paths[asset])
+        yaw = placement.yaw_degrees + rng.uniform(-5.0, 5.0)
+        cfg.func(
+            f"{root}/CinematicModel_{index:02d}_{asset.replace('-', '_')}",
+            cfg,
+            translation=placement.translation,
+            orientation=_yaw_quat(yaw),
+        )
+
+
+@dataclass(frozen=True)
+class _VisualModelPlacement:
+    translation: tuple[float, float, float]
+    yaw_degrees: float
+
+
+def _cinematic_model_placements(
+    settings: WarehouseSceneSettings,
+    seed: int,
+) -> tuple[_VisualModelPlacement, ...]:
+    import math
+
+    rng = Random(seed + 25117)
+    arena_x, arena_y = settings.arena_size_m
+    usable_y = arena_y - 2.0 * settings.boundary_margin_m
+    if usable_y <= 0.0:
+        return ()
+
+    overhead_count = min(3, max(0, settings.visual_model_count // 6))
+    side_count = max(0, settings.visual_model_count - overhead_count)
+    placements: list[_VisualModelPlacement] = []
+    for index in range(side_count):
+        side = -1.0 if index % 2 == 0 else 1.0
+        row = index // 2
+        row_fraction = (row + 0.5) / max(1, math.ceil(side_count / 2.0))
+        y = -usable_y / 2.0 + row_fraction * usable_y + rng.uniform(-0.55, 0.55)
+        x = side * (
+            arena_x / 2.0
+            - settings.visual_model_side_margin_m
+            - rng.uniform(0.0, 0.55)
+        )
+        if abs(x) < settings.visual_model_route_clearance_m:
+            x = side * settings.visual_model_route_clearance_m
+        yaw = -90.0 if side > 0.0 else 90.0
+        placements.append(_VisualModelPlacement((x, y, 0.02), yaw))
+
+    overhead_y = _even_positions(
+        count=overhead_count,
+        low=-arena_y * 0.32,
+        high=arena_y * 0.32,
+    )
+    for y in overhead_y:
+        placements.append(
+            _VisualModelPlacement(
+                (0.0, y, max(2.15, settings.wall_height_m - 0.95)),
+                0.0,
+            )
+        )
+
+    return tuple(placements[: settings.visual_model_count])
 
 
 def _make_visual_cuboid_cfg(

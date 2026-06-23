@@ -15,6 +15,10 @@ logs/**
 checkpoints/**
 !checkpoints/.gitkeep
 outputs/
+assets/models/kenney_factory_kit/**/*.usd
+assets/models/kenney_factory_kit/**/*.usda
+assets/models/kenney_factory_kit/**/*.usdc
+assets/models/kenney_factory_kit/usd_cache/
 
 .env
 .agents/

@@ -37,8 +37,15 @@ warehouse:
     box_texture_id: "metal_plate"
     pillar_texture_id: "metal_plate"
   lighting:
-    intensity: 1800.0
-    color: [0.72, 0.78, 0.86]
+    intensity: 850.0
+    ambient_intensity_scale: 0.015
+    global_intensity_scale: 0.025
+    fixture_intensity_scale: 20.0
+    fixture_radius_m: 0.24
+    fixture_cone_angle_degrees: 24.0
+    fixture_cone_softness: 0.08
+    fixture_focus: 0.78
+    color: [0.55, 0.64, 0.76]
   visuals:
     mode: "cinematic"
     side_clutter_count: 12
@@ -51,27 +58,24 @@ warehouse:
     models:
       asset_root: "assets/models/kenney_factory_kit"
       usd_cache_dir: "assets/models/kenney_factory_kit/usd_cache"
-      count: 24
-      scale: 0.42
-      side_margin_m: 0.72
+      count: 14
+      scale: 0.38
+      side_margin_m: 1.35
       route_clearance_m: 1.75
+      edge_clearance_m: 1.45
+      y_jitter_m: 0.20
       assets:
-        - { asset: "conveyor-long-stripe-sides", count: 3, scale: 0.42 }
-        - { asset: "conveyor-bars-stripe-fence", count: 2, scale: 0.40 }
-        - { asset: "machine-window", count: 2, scale: 0.42 }
-        - { asset: "machine-fortified", count: 2, scale: 0.42 }
-        - { asset: "machine-bed", count: 1, scale: 0.38 }
-        - { asset: "structure-yellow-high", count: 2, scale: 0.44 }
-        - { asset: "structure-window-wide", count: 1, scale: 0.44 }
+        - { asset: "conveyor-long-stripe-sides", count: 2, scale: 0.38 }
+        - { asset: "conveyor-bars-stripe-fence", count: 2, scale: 0.36 }
+        - { asset: "machine-window", count: 2, scale: 0.38 }
+        - { asset: "machine-fortified", count: 2, scale: 0.38 }
+        - { asset: "machine-bed", count: 1, scale: 0.34 }
+        - { asset: "structure-yellow-high", count: 1, scale: 0.40 }
+        - { asset: "structure-window-wide", count: 1, scale: 0.40 }
         - { asset: "robot-arm-a", count: 1, scale: 0.34 }
-        - { asset: "crane", count: 1, scale: 0.34 }
-        - { asset: "crane-lift", count: 1, scale: 0.34 }
-        - { asset: "pipe-large-valve", count: 1, scale: 0.36 }
-        - { asset: "scanner-high", count: 1, scale: 0.38 }
-        - { asset: "screen-panel-wide", count: 1, scale: 0.42 }
+        - { asset: "scanner-high", count: 1, scale: 0.34 }
+        - { asset: "screen-panel-wide", count: 1, scale: 0.36 }
         - { asset: "warning-traffic", count: 1, scale: 0.42 }
-        - { asset: "box-large", count: 2, scale: 0.48 }
-        - { asset: "box-wide", count: 2, scale: 0.48 }
   hallway:
     arena_size_m: [12.0, 24.0]
     obstacle_count: 8

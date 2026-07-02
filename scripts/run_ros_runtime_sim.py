@@ -143,6 +143,7 @@ import isaaclab.sim as sim_utils
 from geometry_msgs.msg import TwistStamped
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from nav_msgs.msg import Odometry
+from pxr import Sdf
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Float32MultiArray
@@ -405,6 +406,55 @@ class DemoRobotMarker:
         )
 
 
+class DemoLightFlicker:
+    """Presentation-only light flicker for the cinematic visible demo."""
+
+    def __init__(self, env: AeroStrikeNavigationEnv) -> None:
+        self._lights: list[tuple[object, float, float, int]] = []
+        settings = env._warehouse_layout.settings
+        if settings.scene_variant != "hallway" or settings.visual_mode != "cinematic":
+            return
+
+        stage = sim_utils.get_current_stage()
+        root = self._visual_root_for(env._warehouse_layout.root_prim_path)
+        for index, _ in enumerate(self._fixture_y_positions(settings.arena_size_m[1])):
+            prim = stage.GetPrimAtPath(f"{root}/VisualLight_{index:02d}")
+            if not prim.IsValid():
+                continue
+            attr = prim.GetAttribute("inputs:intensity")
+            if not attr:
+                attr = prim.CreateAttribute("inputs:intensity", Sdf.ValueTypeNames.Float)
+            base = float(attr.Get() or settings.light_intensity)
+            phase = 1.9 + float(index) * 2.2
+            self._lights.append((attr, base, phase, index))
+
+    def update(self) -> None:
+        if not self._lights:
+            return
+
+        now = time.monotonic()
+        for attr, base, phase, index in self._lights:
+            pulse = 0.70 + 0.30 * math.sin(now * (7.5 + index) + phase)
+            stutter = 0.06 if index % 2 == 1 and math.sin(now * 5.3 + phase) > 0.78 else 1.0
+            blink = 0.03 if index == 1 and math.sin(now * 1.15 + phase) > 0.92 else 1.0
+            attr.Set(base * max(0.02, pulse * stutter * blink))
+
+    @staticmethod
+    def _visual_root_for(root: str) -> str:
+        parts = [part for part in root.rstrip("/").split("/") if part]
+        if "envs" in parts:
+            env_index = parts.index("envs")
+            if env_index + 1 < len(parts):
+                return f"/World/Visuals/{parts[env_index + 1]}/Warehouse"
+        return "/World/Visuals/Warehouse"
+
+    @staticmethod
+    def _fixture_y_positions(arena_y: float) -> tuple[float, ...]:
+        if arena_y <= 18.0:
+            return (-arena_y * 0.25, arena_y * 0.25)
+        return (-arena_y * 0.33, 0.0, arena_y * 0.33)
+
+
 def make_env(args: argparse.Namespace) -> AeroStrikeNavigationEnv:
     """Create the single-env warehouse simulation used by the ROS bridge."""
     cfg = AeroStrikeNavigationEnvCfg()
@@ -442,6 +492,7 @@ def main() -> None:
     env: AeroStrikeNavigationEnv | None = None
     camera: DemoCamera | None = None
     marker: DemoRobotMarker | None = None
+    light_flicker: DemoLightFlicker | None = None
     env_started = False
     publish_period_s = 1.0 / args_cli.publish_rate_hz
     next_publish_wall_time = time.monotonic()
@@ -454,6 +505,8 @@ def main() -> None:
         if args_cli.visible:
             camera = DemoCamera(args_cli)
             camera.update(env)
+            light_flicker = DemoLightFlicker(env)
+            light_flicker.update()
             if args_cli.demo_robot_marker:
                 marker = DemoRobotMarker(args_cli.demo_robot_marker_radius_m)
                 marker.update(env)
@@ -486,6 +539,8 @@ def main() -> None:
             _, _, terminated, truncated, _ = env.step(action)
             if camera is not None:
                 camera.update(env)
+            if light_flicker is not None:
+                light_flicker.update()
             if marker is not None:
                 marker.update(env)
 
@@ -499,6 +554,8 @@ def main() -> None:
                 env.reset()
                 if camera is not None:
                     camera.update(env)
+                if light_flicker is not None:
+                    light_flicker.update()
                 if marker is not None:
                     marker.update(env)
                 next_publish_wall_time = time.monotonic() + publish_period_s

@@ -41,6 +41,13 @@ DEFAULT_BOX_COLOR = (0.55, 0.42, 0.25)
 DEFAULT_PILLAR_COLOR = (0.35, 0.38, 0.40)
 DEFAULT_LIGHT_INTENSITY = 3500.0
 DEFAULT_LIGHT_COLOR = (0.80, 0.82, 0.85)
+DEFAULT_AMBIENT_LIGHT_INTENSITY_SCALE = 0.30
+DEFAULT_GLOBAL_LIGHT_INTENSITY_SCALE = 0.08
+DEFAULT_FIXTURE_LIGHT_INTENSITY_SCALE = 4.0
+DEFAULT_FIXTURE_LIGHT_RADIUS_M = 0.42
+DEFAULT_FIXTURE_LIGHT_CONE_ANGLE_DEG = 42.0
+DEFAULT_FIXTURE_LIGHT_CONE_SOFTNESS = 0.32
+DEFAULT_FIXTURE_LIGHT_FOCUS = 0.35
 DEFAULT_ROUTE_MARKING_COLOR = (0.95, 0.72, 0.18)
 DEFAULT_SAFETY_STRIPE_COLOR = (0.06, 0.07, 0.08)
 DEFAULT_LIGHT_FIXTURE_COLOR = (0.88, 0.92, 0.86)
@@ -76,6 +83,9 @@ DEFAULT_VISUAL_MODEL_COUNT = 0
 DEFAULT_VISUAL_MODEL_SCALE = 0.42
 DEFAULT_VISUAL_MODEL_SIDE_MARGIN_M = 0.62
 DEFAULT_VISUAL_MODEL_ROUTE_CLEARANCE_M = 1.65
+DEFAULT_VISUAL_MODEL_EDGE_CLEARANCE_M = 1.35
+DEFAULT_VISUAL_MODEL_Y_JITTER_M = 0.28
+Y_UP_TO_Z_UP_QUAT = (0.70710678118, 0.70710678118, 0.0, 0.0)
 
 
 @dataclass(frozen=True)
@@ -115,6 +125,13 @@ class WarehouseSceneSettings:
     pillar_color: tuple[float, float, float] = DEFAULT_PILLAR_COLOR
     light_intensity: float = DEFAULT_LIGHT_INTENSITY
     light_color: tuple[float, float, float] = DEFAULT_LIGHT_COLOR
+    ambient_light_intensity_scale: float = DEFAULT_AMBIENT_LIGHT_INTENSITY_SCALE
+    global_light_intensity_scale: float = DEFAULT_GLOBAL_LIGHT_INTENSITY_SCALE
+    fixture_light_intensity_scale: float = DEFAULT_FIXTURE_LIGHT_INTENSITY_SCALE
+    fixture_light_radius_m: float = DEFAULT_FIXTURE_LIGHT_RADIUS_M
+    fixture_light_cone_angle_degrees: float = DEFAULT_FIXTURE_LIGHT_CONE_ANGLE_DEG
+    fixture_light_cone_softness: float = DEFAULT_FIXTURE_LIGHT_CONE_SOFTNESS
+    fixture_light_focus: float = DEFAULT_FIXTURE_LIGHT_FOCUS
     route_marking_color: tuple[float, float, float] = DEFAULT_ROUTE_MARKING_COLOR
     safety_stripe_color: tuple[float, float, float] = DEFAULT_SAFETY_STRIPE_COLOR
     light_fixture_color: tuple[float, float, float] = DEFAULT_LIGHT_FIXTURE_COLOR
@@ -149,6 +166,8 @@ class WarehouseSceneSettings:
     visual_model_scale: float = DEFAULT_VISUAL_MODEL_SCALE
     visual_model_side_margin_m: float = DEFAULT_VISUAL_MODEL_SIDE_MARGIN_M
     visual_model_route_clearance_m: float = DEFAULT_VISUAL_MODEL_ROUTE_CLEARANCE_M
+    visual_model_edge_clearance_m: float = DEFAULT_VISUAL_MODEL_EDGE_CLEARANCE_M
+    visual_model_y_jitter_m: float = DEFAULT_VISUAL_MODEL_Y_JITTER_M
     visual_model_specs: tuple[VisualModelSpec, ...] = ()
 
 
@@ -338,6 +357,34 @@ def load_warehouse_scene_settings(config_path: Path | str = DEFAULT_CONFIG_PATH)
         pillar_color=_as_color(materials.get("pillar_color"), DEFAULT_PILLAR_COLOR),
         light_intensity=float(lighting.get("intensity", DEFAULT_LIGHT_INTENSITY)),
         light_color=_as_color(lighting.get("color"), DEFAULT_LIGHT_COLOR),
+        ambient_light_intensity_scale=max(
+            0.0,
+            float(lighting.get("ambient_intensity_scale", DEFAULT_AMBIENT_LIGHT_INTENSITY_SCALE)),
+        ),
+        global_light_intensity_scale=max(
+            0.0,
+            float(lighting.get("global_intensity_scale", DEFAULT_GLOBAL_LIGHT_INTENSITY_SCALE)),
+        ),
+        fixture_light_intensity_scale=max(
+            0.0,
+            float(lighting.get("fixture_intensity_scale", DEFAULT_FIXTURE_LIGHT_INTENSITY_SCALE)),
+        ),
+        fixture_light_radius_m=max(
+            0.01,
+            float(lighting.get("fixture_radius_m", DEFAULT_FIXTURE_LIGHT_RADIUS_M)),
+        ),
+        fixture_light_cone_angle_degrees=max(
+            1.0,
+            float(lighting.get("fixture_cone_angle_degrees", DEFAULT_FIXTURE_LIGHT_CONE_ANGLE_DEG)),
+        ),
+        fixture_light_cone_softness=min(
+            1.0,
+            max(0.0, float(lighting.get("fixture_cone_softness", DEFAULT_FIXTURE_LIGHT_CONE_SOFTNESS))),
+        ),
+        fixture_light_focus=min(
+            1.0,
+            max(0.0, float(lighting.get("fixture_focus", DEFAULT_FIXTURE_LIGHT_FOCUS))),
+        ),
         route_marking_color=_as_color(materials.get("route_marking_color"), DEFAULT_ROUTE_MARKING_COLOR),
         safety_stripe_color=_as_color(materials.get("safety_stripe_color"), DEFAULT_SAFETY_STRIPE_COLOR),
         light_fixture_color=_as_color(materials.get("light_fixture_color"), DEFAULT_LIGHT_FIXTURE_COLOR),
@@ -401,6 +448,13 @@ def load_warehouse_scene_settings(config_path: Path | str = DEFAULT_CONFIG_PATH)
         ),
         visual_model_route_clearance_m=float(
             models.get("route_clearance_m", DEFAULT_VISUAL_MODEL_ROUTE_CLEARANCE_M)
+        ),
+        visual_model_edge_clearance_m=float(
+            models.get("edge_clearance_m", DEFAULT_VISUAL_MODEL_EDGE_CLEARANCE_M)
+        ),
+        visual_model_y_jitter_m=max(
+            0.0,
+            float(models.get("y_jitter_m", DEFAULT_VISUAL_MODEL_Y_JITTER_M)),
         ),
         visual_model_specs=_visual_model_specs(models.get("assets"), model_scale),
     )
@@ -526,6 +580,13 @@ def _with_hallway_arena(settings: WarehouseSceneSettings) -> WarehouseSceneSetti
         pillar_color=settings.pillar_color,
         light_intensity=settings.light_intensity,
         light_color=settings.light_color,
+        ambient_light_intensity_scale=settings.ambient_light_intensity_scale,
+        global_light_intensity_scale=settings.global_light_intensity_scale,
+        fixture_light_intensity_scale=settings.fixture_light_intensity_scale,
+        fixture_light_radius_m=settings.fixture_light_radius_m,
+        fixture_light_cone_angle_degrees=settings.fixture_light_cone_angle_degrees,
+        fixture_light_cone_softness=settings.fixture_light_cone_softness,
+        fixture_light_focus=settings.fixture_light_focus,
         route_marking_color=settings.route_marking_color,
         safety_stripe_color=settings.safety_stripe_color,
         light_fixture_color=settings.light_fixture_color,
@@ -560,6 +621,8 @@ def _with_hallway_arena(settings: WarehouseSceneSettings) -> WarehouseSceneSetti
         visual_model_scale=settings.visual_model_scale,
         visual_model_side_margin_m=settings.visual_model_side_margin_m,
         visual_model_route_clearance_m=settings.visual_model_route_clearance_m,
+        visual_model_edge_clearance_m=settings.visual_model_edge_clearance_m,
+        visual_model_y_jitter_m=settings.visual_model_y_jitter_m,
         visual_model_specs=settings.visual_model_specs,
     )
 
@@ -572,13 +635,16 @@ def spawn_warehouse_scene(layout: WarehouseLayout | None = None) -> WarehouseLay
 
     import isaaclab.sim as sim_utils
 
+    global_light_intensity = settings.light_intensity * settings.global_light_intensity_scale
     light_cfg = sim_utils.DistantLightCfg(
-        intensity=settings.light_intensity,
+        intensity=global_light_intensity,
         color=settings.light_color,
-        angle=2.0,
+        angle=0.55,
     )
-    if not sim_utils.get_current_stage().GetPrimAtPath("/World/Light").IsValid():
+    stage = sim_utils.get_current_stage()
+    if not stage.GetPrimAtPath("/World/Light").IsValid():
         light_cfg.func("/World/Light", light_cfg)
+    _set_light_attrs("/World/Light", global_light_intensity, settings.light_color)
 
     floor_cfg = _make_cuboid_cfg(
         settings.arena_size_m + (settings.floor_thickness_m,),
@@ -653,6 +719,7 @@ def spawn_warehouse_scene(layout: WarehouseLayout | None = None) -> WarehouseLay
         scene_layout.seed,
         scene_layout.start_position,
         scene_layout.goal_position,
+        scene_layout.obstacles,
     )
     return scene_layout
 
@@ -821,6 +888,83 @@ def _set_shader_input(shader: Any, name: str, value_type: Any, value: Any) -> No
     shader_input.Set(value)
 
 
+def _spawn_or_update_fixture_light(
+    prim_path: str,
+    *,
+    intensity: float,
+    color: tuple[float, float, float],
+    translation: tuple[float, float, float],
+    radius: float,
+    cone_angle_degrees: float,
+    cone_softness: float,
+    focus: float,
+) -> None:
+    import isaaclab.sim as sim_utils
+
+    stage = sim_utils.get_current_stage()
+    if not stage.GetPrimAtPath(prim_path).IsValid():
+        light_cfg = sim_utils.DiskLightCfg(
+            intensity=intensity,
+            color=color,
+            radius=radius,
+            normalize=True,
+        )
+        light_cfg.func(prim_path, light_cfg, translation=translation)
+    _set_light_attrs(prim_path, intensity, color)
+    _set_light_shape_attrs(
+        prim_path,
+        radius=radius,
+        cone_angle_degrees=cone_angle_degrees,
+        cone_softness=cone_softness,
+        focus=focus,
+    )
+
+
+def _set_light_shape_attrs(
+    prim_path: str,
+    *,
+    radius: float,
+    cone_angle_degrees: float,
+    cone_softness: float,
+    focus: float,
+) -> None:
+    from pxr import Sdf
+
+    import isaaclab.sim as sim_utils
+
+    prim = sim_utils.get_current_stage().GetPrimAtPath(prim_path)
+    if not prim.IsValid():
+        return
+    _set_prim_attr(prim, "inputs:radius", Sdf.ValueTypeNames.Float, float(radius))
+    _set_prim_attr(prim, "inputs:normalize", Sdf.ValueTypeNames.Bool, True)
+    _set_prim_attr(prim, "inputs:shaping:cone:angle", Sdf.ValueTypeNames.Float, float(cone_angle_degrees))
+    _set_prim_attr(prim, "inputs:shaping:cone:softness", Sdf.ValueTypeNames.Float, float(cone_softness))
+    _set_prim_attr(prim, "inputs:shaping:focus", Sdf.ValueTypeNames.Float, float(focus))
+
+
+def _set_light_attrs(
+    prim_path: str,
+    intensity: float,
+    color: tuple[float, float, float],
+) -> None:
+    from pxr import Gf, Sdf
+
+    import isaaclab.sim as sim_utils
+
+    prim = sim_utils.get_current_stage().GetPrimAtPath(prim_path)
+    if not prim.IsValid():
+        return
+    _set_prim_attr(prim, "inputs:intensity", Sdf.ValueTypeNames.Float, float(intensity))
+    _set_prim_attr(prim, "inputs:color", Sdf.ValueTypeNames.Color3f, Gf.Vec3f(*color))
+
+
+def _set_prim_attr(prim: Any, name: str, value_type: Any, value: Any) -> None:
+    attr = prim.GetAttribute(name)
+    if not attr:
+        attr = prim.CreateAttribute(name, value_type)
+    attr.Set(value)
+
+
 def _texture_scale_for_size(size: tuple[float, float, float], meters_per_tile: float) -> tuple[float, float]:
     ordered = sorted((abs(size[0]), abs(size[1]), abs(size[2])), reverse=True)
     return max(1.0, ordered[0] / meters_per_tile), max(1.0, ordered[1] / meters_per_tile)
@@ -832,6 +976,7 @@ def _spawn_visual_polish(
     seed: int,
     start: tuple[float, float, float],
     goal: tuple[float, float, float],
+    obstacles: tuple[WarehousePrimitive, ...] = (),
 ) -> None:
     _spawn_route_markings(visual_root, settings, start, goal)
     _spawn_wall_safety_bands(visual_root, settings)
@@ -839,7 +984,7 @@ def _spawn_visual_polish(
     if settings.scene_variant == "hallway":
         _spawn_ceiling_beams(visual_root, settings)
         _spawn_side_clutter(visual_root, settings, seed)
-        _spawn_cinematic_models(visual_root, settings, seed)
+        _spawn_cinematic_models(visual_root, settings, seed, obstacles)
 
 
 def _spawn_route_markings(
@@ -906,20 +1051,49 @@ def _spawn_overhead_lights(root: str, settings: WarehouseSceneSettings) -> None:
     arena_y = settings.arena_size_m[1]
     fixture_y_positions = _fixture_y_positions(arena_y)
     z = settings.wall_height_m - 0.18
-    emissive_scale = 1.1 if settings.visual_mode == "cinematic" else 0.65
+    emissive_scale = 2.4 if settings.visual_mode == "cinematic" else 0.65
+    fixture_intensity = settings.light_intensity * settings.fixture_light_intensity_scale
+    _remove_visual_light_beams(root, len(fixture_y_positions))
     for index, y in enumerate(fixture_y_positions):
-        flicker = 0.72 if settings.visual_mode == "cinematic" and index % 2 == 1 else 1.0
+        brightness = _fixture_brightness(index, settings.visual_mode)
         fixture_cfg = _make_visual_cuboid_cfg(
             size=(2.2, 0.16, 0.045),
-            color=_scale_color(settings.light_fixture_color, flicker),
+            color=_scale_color(settings.light_fixture_color, brightness),
             roughness=0.2,
-            emissive_color=_scale_color(settings.light_fixture_color, emissive_scale * flicker),
+            emissive_color=_scale_color(settings.light_fixture_color, emissive_scale * brightness),
         )
         fixture_cfg.func(
             f"{root}/VisualLightFixture_{index:02d}",
             fixture_cfg,
             translation=(0.0, y, z),
         )
+        _spawn_or_update_fixture_light(
+            f"{root}/VisualLight_{index:02d}",
+            intensity=fixture_intensity * brightness,
+            color=settings.light_fixture_color,
+            translation=(0.0, y, z - 0.08),
+            radius=settings.fixture_light_radius_m,
+            cone_angle_degrees=settings.fixture_light_cone_angle_degrees,
+            cone_softness=settings.fixture_light_cone_softness,
+            focus=settings.fixture_light_focus,
+        )
+
+
+def _fixture_brightness(index: int, visual_mode: Literal["cinematic", "bright"]) -> float:
+    if visual_mode != "cinematic":
+        return 1.0
+    pattern = (1.0, 0.24, 0.72)
+    return pattern[index % len(pattern)]
+
+
+def _remove_visual_light_beams(root: str, fixture_count: int) -> None:
+    import isaaclab.sim as sim_utils
+
+    stage = sim_utils.get_current_stage()
+    for index in range(max(12, fixture_count + 4)):
+        prim_path = f"{root}/VisualLightBeam_{index:02d}"
+        if stage.GetPrimAtPath(prim_path).IsValid():
+            stage.RemovePrim(prim_path)
 
 
 def _spawn_ceiling_beams(root: str, settings: WarehouseSceneSettings) -> None:
@@ -991,14 +1165,19 @@ def _spawn_side_clutter(root: str, settings: WarehouseSceneSettings, seed: int) 
         )
 
 
-def _spawn_cinematic_models(root: str, settings: WarehouseSceneSettings, seed: int) -> None:
+def _spawn_cinematic_models(
+    root: str,
+    settings: WarehouseSceneSettings,
+    seed: int,
+    obstacles: tuple[WarehousePrimitive, ...] = (),
+) -> None:
     if settings.visual_model_count <= 0 or not settings.visual_model_specs:
         return
 
     import isaaclab.sim as sim_utils
     from isaaclab.sim.converters import MeshConverter, MeshConverterCfg
 
-    placements = _cinematic_model_placements(settings, seed)
+    placements = _cinematic_model_placements(settings, seed, obstacles)
     if not placements:
         return
 
@@ -1013,6 +1192,7 @@ def _spawn_cinematic_models(root: str, settings: WarehouseSceneSettings, seed: i
                 usd_dir=str(settings.visual_model_usd_cache_dir / spec.asset),
                 usd_file_name=f"{spec.asset}.usd",
                 scale=(spec.scale, spec.scale, spec.scale),
+                rotation=Y_UP_TO_Z_UP_QUAT,
                 make_instanceable=True,
             )
         )
@@ -1052,6 +1232,7 @@ class _VisualModelPlacement:
 def _cinematic_model_placements(
     settings: WarehouseSceneSettings,
     seed: int,
+    obstacles: tuple[WarehousePrimitive, ...] = (),
 ) -> tuple[_VisualModelPlacement, ...]:
     import math
 
@@ -1061,38 +1242,84 @@ def _cinematic_model_placements(
     if usable_y <= 0.0:
         return ()
 
-    overhead_count = min(3, max(0, settings.visual_model_count // 6))
-    side_count = max(0, settings.visual_model_count - overhead_count)
+    side_count = max(0, settings.visual_model_count)
+    rows_per_side = max(1, math.ceil(side_count / 2.0))
+    x_abs = _side_visual_x(settings)
+    y_jitter = min(settings.visual_model_y_jitter_m, usable_y / max(2.0, rows_per_side * 3.0))
+    blocked_y = tuple(obstacle.translation[1] for obstacle in obstacles)
     placements: list[_VisualModelPlacement] = []
     for index in range(side_count):
         side = -1.0 if index % 2 == 0 else 1.0
         row = index // 2
-        row_fraction = (row + 0.5) / max(1, math.ceil(side_count / 2.0))
-        y = -usable_y / 2.0 + row_fraction * usable_y + rng.uniform(-0.55, 0.55)
-        x = side * (
-            arena_x / 2.0
-            - settings.visual_model_side_margin_m
-            - rng.uniform(0.0, 0.55)
-        )
-        if abs(x) < settings.visual_model_route_clearance_m:
-            x = side * settings.visual_model_route_clearance_m
+        row_fraction = (row + 0.5) / rows_per_side
+        y = -usable_y / 2.0 + row_fraction * usable_y + rng.uniform(-y_jitter, y_jitter)
+        y = _avoid_blocked_y(y, blocked_y, usable_y)
+        x = side * x_abs
         yaw = -90.0 if side > 0.0 else 90.0
         placements.append(_VisualModelPlacement((x, y, 0.02), yaw))
 
-    overhead_y = _even_positions(
-        count=overhead_count,
-        low=-arena_y * 0.32,
-        high=arena_y * 0.32,
-    )
-    for y in overhead_y:
-        placements.append(
-            _VisualModelPlacement(
-                (0.0, y, max(2.15, settings.wall_height_m - 0.95)),
-                0.0,
-            )
-        )
-
     return tuple(placements[: settings.visual_model_count])
+
+
+def _avoid_blocked_y(
+    y: float,
+    blocked_y: tuple[float, ...],
+    usable_y: float,
+    min_clearance_m: float = 1.0,
+) -> float:
+    low = -usable_y / 2.0
+    high = usable_y / 2.0
+    intervals = _merged_clearance_intervals(blocked_y, low, high, min_clearance_m)
+    for interval_low, interval_high in intervals:
+        if interval_low <= y <= interval_high:
+            candidates = []
+            before = interval_low - 0.05
+            after = interval_high + 0.05
+            if before >= low:
+                candidates.append(before)
+            if after <= high:
+                candidates.append(after)
+            if not candidates:
+                return max(low, min(high, y))
+            return min(candidates, key=lambda candidate: abs(candidate - y))
+    return y
+
+
+def _merged_clearance_intervals(
+    blocked_y: tuple[float, ...],
+    low: float,
+    high: float,
+    clearance_m: float,
+) -> tuple[tuple[float, float], ...]:
+    intervals = sorted(
+        (max(low, y - clearance_m), min(high, y + clearance_m))
+        for y in blocked_y
+    )
+    if not intervals:
+        return ()
+
+    merged: list[tuple[float, float]] = []
+    current_low, current_high = intervals[0]
+    for interval_low, interval_high in intervals[1:]:
+        if interval_low <= current_high:
+            current_high = max(current_high, interval_high)
+            continue
+        merged.append((current_low, current_high))
+        current_low, current_high = interval_low, interval_high
+    merged.append((current_low, current_high))
+    return tuple(merged)
+
+
+def _side_visual_x(settings: WarehouseSceneSettings) -> float:
+    wall_clearance = max(
+        settings.visual_model_edge_clearance_m,
+        settings.visual_model_side_margin_m,
+    )
+    max_side_x = settings.arena_size_m[0] / 2.0 - wall_clearance
+    min_side_x = settings.visual_model_route_clearance_m
+    if max_side_x <= min_side_x:
+        return max(0.0, max_side_x)
+    return (min_side_x + max_side_x) / 2.0
 
 
 def _make_visual_cuboid_cfg(

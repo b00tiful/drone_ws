@@ -88,7 +88,11 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         if self.device == "cpu":
             self.scene.filter_collisions(global_prim_paths=[])
 
-        light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
+        settings = self._warehouse_layout.settings
+        light_cfg = sim_utils.DomeLightCfg(
+            intensity=settings.light_intensity * settings.ambient_light_intensity_scale,
+            color=settings.light_color,
+        )
         light_cfg.func("/World/AmbientLight", light_cfg)
 
     def _layout_seed_for_env(self, env_index: int) -> int:

@@ -13,8 +13,12 @@ from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors.ray_caster import MultiMeshRayCaster, MultiMeshRayCasterCfg
 from isaaclab.utils.math import quat_apply, subtract_frame_transforms
 
-from aerostrike_lab.assets.quadrotor import AEROSTRIKE_RAY_SENSOR_SETTINGS, make_lidar_pattern_cfg
-from aerostrike_lab.scenes.warehouse import sample_warehouse_layout, spawn_warehouse_scene
+from aerostrike_lab.assets.quadrotor import make_lidar_pattern_cfg
+from aerostrike_lab.scenes.warehouse import (
+    load_warehouse_scene_settings,
+    sample_warehouse_layout,
+    spawn_warehouse_scene,
+)
 from aerostrike_lab.tasks.navigation.nav_env_cfg import AeroStrikeNavigationEnvCfg
 
 
@@ -37,7 +41,7 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         self._goal_distance = torch.zeros(self.num_envs, device=self.device)
         self._min_ray_distance_m = torch.full(
             (self.num_envs,),
-            AEROSTRIKE_RAY_SENSOR_SETTINGS.max_range_m,
+            self.cfg.ray_sensor_settings.max_range_m,
             dtype=torch.float,
             device=self.device,
         )
@@ -67,10 +71,12 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
 
     def _setup_scene(self) -> None:
         self._warehouse_layouts = []
+        scene_settings = load_warehouse_scene_settings(self.cfg.warehouse_scene_config_path)
         for env_index in range(self.cfg.scene.num_envs):
             seed = self._layout_seed_for_env(env_index)
             root_prim_path = self._warehouse_root_for_env(env_index)
             layout = sample_warehouse_layout(
+                settings=scene_settings,
                 seed=seed,
                 root_prim_path=root_prim_path,
                 scene_variant=self.cfg.warehouse_scene_variant,
@@ -271,12 +277,12 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
             dim=1,
         )
         self._goal_distance[env_ids] = self._previous_goal_distance[env_ids]
-        self._min_ray_distance_m[env_ids] = AEROSTRIKE_RAY_SENSOR_SETTINGS.max_range_m
+        self._min_ray_distance_m[env_ids] = self.cfg.ray_sensor_settings.max_range_m
         self._reached_goal[env_ids] = False
         self._collision[env_ids] = False
 
     def _make_raycaster_cfg(self) -> MultiMeshRayCasterCfg:
-        sensor_settings = AEROSTRIKE_RAY_SENSOR_SETTINGS
+        sensor_settings = self.cfg.ray_sensor_settings
         robot_body_prim = f"{self.cfg.robot.prim_path.rstrip('/')}/{sensor_settings.prim_suffix.lstrip('/')}"
         return MultiMeshRayCasterCfg(
             prim_path=robot_body_prim,
@@ -296,28 +302,29 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
 
     def _get_normalized_ray_distances(self) -> torch.Tensor:
         distances = self._get_ray_distances_m()
-        return distances / AEROSTRIKE_RAY_SENSOR_SETTINGS.max_range_m
+        return distances / self.cfg.ray_sensor_settings.max_range_m
 
     def _get_ray_distances_m(self) -> torch.Tensor:
+        sensor_settings = self.cfg.ray_sensor_settings
         ray_hits_w = self._ray_caster.data.ray_hits_w
         if ray_hits_w is None or self._ray_caster.data.pos_w is None:
             return torch.ones(
                 self.num_envs,
-                AEROSTRIKE_RAY_SENSOR_SETTINGS.ray_count,
+                sensor_settings.ray_count,
                 dtype=torch.float,
                 device=self.device,
-            ) * AEROSTRIKE_RAY_SENSOR_SETTINGS.max_range_m
+            ) * sensor_settings.max_range_m
         ray_origins_w = self._ray_caster.data.pos_w.unsqueeze(1)
         distances = torch.linalg.norm(ray_hits_w - ray_origins_w, dim=-1)
         distances = torch.nan_to_num(
             distances,
-            nan=AEROSTRIKE_RAY_SENSOR_SETTINGS.max_range_m,
-            posinf=AEROSTRIKE_RAY_SENSOR_SETTINGS.max_range_m,
-            neginf=AEROSTRIKE_RAY_SENSOR_SETTINGS.max_range_m,
+            nan=sensor_settings.max_range_m,
+            posinf=sensor_settings.max_range_m,
+            neginf=sensor_settings.max_range_m,
         )
         distances = distances.clamp(
-            min=AEROSTRIKE_RAY_SENSOR_SETTINGS.min_range_m,
-            max=AEROSTRIKE_RAY_SENSOR_SETTINGS.max_range_m,
+            min=sensor_settings.min_range_m,
+            max=sensor_settings.max_range_m,
         )
         return distances
 

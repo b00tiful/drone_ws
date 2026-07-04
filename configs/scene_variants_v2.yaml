@@ -1,0 +1,96 @@
+# Demo V2 scene configuration.
+# First implementation target is an 80-120 m long warehouse route.
+# Infinite chunk streaming and forest variants are later milestones.
+
+warehouse:
+  scene_variant: "long_warehouse"
+  arena_size_m: [20.0, 110.0]
+  wall_height_m: 6.0
+  wall_thickness_m: 0.3
+  floor_thickness_m: 0.1
+  obstacle_count_range: [30, 44]
+  pillar_count_range: [6, 10]
+  box_size_range_m: [0.8, 4.0]
+  obstacle_height_range_m: [1.2, 5.0]
+  pillar_radius_range_m: [0.25, 0.65]
+  min_start_goal_distance_m: 90.0
+  target_altitude_m: 1.8
+  start_goal_clearance_m: 3.0
+  obstacle_clearance_m: 1.2
+  boundary_margin_m: 1.5
+  layout_seed: 101
+  box_yaw_range_degrees: [0.0, 180.0]
+  sampling_attempts: 300
+  materials:
+    floor_color: [0.12, 0.13, 0.13]
+    wall_color: [0.42, 0.46, 0.48]
+    box_color: [0.48, 0.38, 0.24]
+    pillar_color: [0.34, 0.37, 0.38]
+    route_marking_color: [0.95, 0.72, 0.18]
+    safety_stripe_color: [0.05, 0.06, 0.06]
+    light_fixture_color: [0.86, 0.91, 0.84]
+    side_clutter_color: [0.30, 0.25, 0.18]
+    ceiling_beam_color: [0.18, 0.20, 0.21]
+    textures_enabled: true
+    texture_root: "assets/textures/polyhaven"
+    floor_texture_id: "concrete_floor_worn_001"
+    wall_texture_id: "concrete_floor_worn_001"
+    box_texture_id: "metal_plate"
+    pillar_texture_id: "metal_plate"
+  lighting:
+    intensity: 900.0
+    ambient_intensity_scale: 0.025
+    global_intensity_scale: 0.035
+    fixture_intensity_scale: 18.0
+    fixture_radius_m: 0.28
+    fixture_cone_angle_degrees: 28.0
+    fixture_cone_softness: 0.10
+    fixture_focus: 0.70
+    color: [0.55, 0.64, 0.76]
+  visuals:
+    mode: "cinematic"
+    side_clutter_count: 36
+    side_clutter_size_m: [0.90, 0.60, 0.52]
+    side_clutter_margin_m: 1.2
+    ceiling_beam_count: 18
+    ceiling_beam_depth_m: 0.10
+    ceiling_beam_height_m: 0.08
+    ceiling_beam_top_offset_m: 0.08
+    models:
+      asset_root: "assets/models/kenney_factory_kit"
+      usd_cache_dir: "assets/models/kenney_factory_kit/usd_cache"
+      count: 32
+      scale: 0.40
+      side_margin_m: 1.7
+      route_clearance_m: 2.7
+      edge_clearance_m: 1.8
+      y_jitter_m: 0.45
+      assets:
+        - { asset: "conveyor-long-stripe-sides", count: 4, scale: 0.40 }
+        - { asset: "conveyor-bars-stripe-fence", count: 4, scale: 0.38 }
+        - { asset: "machine-window", count: 4, scale: 0.40 }
+        - { asset: "machine-fortified", count: 4, scale: 0.40 }
+        - { asset: "machine-bed", count: 3, scale: 0.36 }
+        - { asset: "structure-yellow-high", count: 3, scale: 0.42 }
+        - { asset: "structure-window-wide", count: 3, scale: 0.42 }
+        - { asset: "robot-arm-a", count: 2, scale: 0.36 }
+        - { asset: "scanner-high", count: 2, scale: 0.36 }
+        - { asset: "screen-panel-wide", count: 2, scale: 0.38 }
+        - { asset: "warning-traffic", count: 1, scale: 0.42 }
+  hallway:
+    arena_size_m: [18.0, 110.0]
+    obstacle_count: 36
+    start_y_m: -50.0
+    goal_y_m: 50.0
+    lane_x_range_m: [-1.5, 1.5]
+    obstacle_x_range_m: [-7.0, 7.0]
+    center_clearance_m: 2.6
+    obstacle_y_margin_m: 7.0
+    obstacle_spacing_m: 2.8
+
+sensor:
+  ray_count: 48
+  min_range_m: 0.2
+  max_range_m: 40.0
+  azimuth_degrees: [-170.0, 170.0]
+  elevation_degrees: [-20.0, 20.0]

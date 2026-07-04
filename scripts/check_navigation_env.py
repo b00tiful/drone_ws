@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import atexit
+import os
 import sys
 from pathlib import Path
 
@@ -18,6 +20,12 @@ from isaaclab.app import AppLauncher
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments before launching Isaac Sim."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--profile",
+        choices=("v1", "v2"),
+        default="v1",
+        help="Environment profile to smoke-check.",
+    )
     parser.add_argument("--num_envs", type=int, default=1, help="Number of environments for the smoke check.")
     parser.add_argument("--steps", type=int, default=10, help="Number of zero-action environment steps to run.")
     parser.add_argument(
@@ -49,17 +57,36 @@ args_cli = parse_args()
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
+_VALIDATION_COMPLETE = False
+
+
+def _fail_if_validation_incomplete() -> None:
+    """Make an early Isaac/Python shutdown fail the smoke gate."""
+    if not _VALIDATION_COMPLETE:
+        print(
+            "[ERROR]: Navigation env smoke check exited before validation completed.",
+            file=sys.stderr,
+            flush=True,
+        )
+        os._exit(1)
+
+
+atexit.register(_fail_if_validation_incomplete)
+
 import torch
 
 from aerostrike_lab.tasks.navigation.nav_env import AeroStrikeNavigationEnv
-from aerostrike_lab.tasks.navigation.nav_env_cfg import AeroStrikeNavigationEnvCfg
-from aerostrike_lab.assets.quadrotor import AEROSTRIKE_RAY_SENSOR_SETTINGS
+from aerostrike_lab.tasks.navigation.nav_env_cfg import (
+    AeroStrikeNavigationEnvCfg,
+    AeroStrikeNavigationV2EnvCfg,
+)
 from isaaclab.utils.math import subtract_frame_transforms
 
 
 def main() -> None:
     """Create, reset, and step the navigation environment."""
-    cfg = AeroStrikeNavigationEnvCfg()
+    global _VALIDATION_COMPLETE
+    cfg = AeroStrikeNavigationV2EnvCfg() if args_cli.profile == "v2" else AeroStrikeNavigationEnvCfg()
     cfg.scene.num_envs = args_cli.num_envs
     cfg.sim.device = args_cli.device
     env = AeroStrikeNavigationEnv(cfg)
@@ -79,7 +106,8 @@ def main() -> None:
         root_pos = final_root_pos[0].detach().cpu().tolist()
         root_velocity = env._robot.data.root_lin_vel_w[0].detach().cpu().tolist()
         goal_pos = env._desired_pos_w[0].detach().cpu().tolist()
-        goal_direction_obs = policy_obs[:, AEROSTRIKE_RAY_SENSOR_SETTINGS.ray_count + 9 : AEROSTRIKE_RAY_SENSOR_SETTINGS.ray_count + 12]
+        ray_count = cfg.ray_sensor_settings.ray_count
+        goal_direction_obs = policy_obs[:, ray_count + 9 : ray_count + 12]
         expected_goal_pos_b, _ = subtract_frame_transforms(
             final_root_pos,
             env._robot.data.root_quat_w,
@@ -88,26 +116,26 @@ def main() -> None:
         expected_goal_distance = torch.linalg.norm(expected_goal_pos_b, dim=1)
         expected_goal_direction_b = expected_goal_pos_b / expected_goal_distance.unsqueeze(-1).clamp_min(1.0e-6)
         goal_direction_error = torch.linalg.norm(goal_direction_obs - expected_goal_direction_b, dim=1)
-        print("[INFO]: AeroStrike navigation env smoke-check setup complete.")
-        print(f"[INFO]: Num envs: {env.num_envs}")
-        print(f"[INFO]: Observation shape: {tuple(policy_obs.shape)}")
-        print(f"[INFO]: Action shape: {tuple(action.shape)}")
-        print(f"[INFO]: Applied action: {list(args_cli.action)}")
-        print(f"[INFO]: Ray count: {env._ray_caster.num_rays}")
-        print(f"[INFO]: Robot root position: {root_pos}")
-        print(f"[INFO]: Robot root velocity: {root_velocity}")
-        print(f"[INFO]: Robot displacement: {float(displacement[0].detach().cpu())}")
-        print(f"[INFO]: Total reward: {float(total_reward[0].detach().cpu())}")
-        print(f"[INFO]: Goal distance: {float(env._goal_distance[0].detach().cpu())}")
-        print(f"[INFO]: Min ray distance: {float(env._min_ray_distance_m[0].detach().cpu())}")
-        print(f"[INFO]: Goal position: {goal_pos}")
-        print(f"[INFO]: Goal direction observation: {goal_direction_obs[0].detach().cpu().tolist()}")
-        print(f"[INFO]: Goal direction error: {float(goal_direction_error.max().detach().cpu())}")
-        print(f"[INFO]: Any terminated: {bool(terminated.any())}")
-        print(f"[INFO]: Any truncated: {bool(truncated.any())}")
-        if env._ray_caster.num_rays != AEROSTRIKE_RAY_SENSOR_SETTINGS.ray_count:
+        print("[INFO]: AeroStrike navigation env smoke-check setup complete.", flush=True)
+        print(f"[INFO]: Num envs: {env.num_envs}", flush=True)
+        print(f"[INFO]: Observation shape: {tuple(policy_obs.shape)}", flush=True)
+        print(f"[INFO]: Action shape: {tuple(action.shape)}", flush=True)
+        print(f"[INFO]: Applied action: {list(args_cli.action)}", flush=True)
+        print(f"[INFO]: Ray count: {env._ray_caster.num_rays}", flush=True)
+        print(f"[INFO]: Robot root position: {root_pos}", flush=True)
+        print(f"[INFO]: Robot root velocity: {root_velocity}", flush=True)
+        print(f"[INFO]: Robot displacement: {float(displacement[0].detach().cpu())}", flush=True)
+        print(f"[INFO]: Total reward: {float(total_reward[0].detach().cpu())}", flush=True)
+        print(f"[INFO]: Goal distance: {float(env._goal_distance[0].detach().cpu())}", flush=True)
+        print(f"[INFO]: Min ray distance: {float(env._min_ray_distance_m[0].detach().cpu())}", flush=True)
+        print(f"[INFO]: Goal position: {goal_pos}", flush=True)
+        print(f"[INFO]: Goal direction observation: {goal_direction_obs[0].detach().cpu().tolist()}", flush=True)
+        print(f"[INFO]: Goal direction error: {float(goal_direction_error.max().detach().cpu())}", flush=True)
+        print(f"[INFO]: Any terminated: {bool(terminated.any())}", flush=True)
+        print(f"[INFO]: Any truncated: {bool(truncated.any())}", flush=True)
+        if env._ray_caster.num_rays != ray_count:
             raise RuntimeError(
-                f"Ray count mismatch: expected {AEROSTRIKE_RAY_SENSOR_SETTINGS.ray_count}, "
+                f"Ray count mismatch: expected {ray_count}, "
                 f"got {env._ray_caster.num_rays}"
             )
         if policy_obs.shape[-1] != cfg.observation_space:
@@ -133,7 +161,8 @@ def main() -> None:
                 raise RuntimeError(
                     f"Goal direction mismatch: max error {float(goal_direction_error.max().detach().cpu())}"
                 )
-        print("[INFO]: Navigation env smoke check complete.")
+        _VALIDATION_COMPLETE = True
+        print("[INFO]: Navigation env smoke check complete.", flush=True)
     finally:
         env.close()
 

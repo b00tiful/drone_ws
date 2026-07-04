@@ -18,10 +18,16 @@ from isaaclab.app import AppLauncher
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments before launching Isaac Sim."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--profile",
+        choices=("v1", "v2"),
+        default="v1",
+        help="Scene config profile to smoke-check.",
+    )
     parser.add_argument("--seed", type=int, default=None, help="Override the YAML layout seed.")
     parser.add_argument(
         "--scene_variant",
-        choices=("warehouse", "hallway"),
+        choices=("warehouse", "hallway", "long_warehouse"),
         default="warehouse",
         help="Procedural scene variant to spawn.",
     )
@@ -50,7 +56,12 @@ def main() -> None:
     sim = SimulationContext(sim_cfg)
     sim.set_camera_view(eye=[13.0, 13.0, 9.0], target=[0.0, 0.0, 1.0])
 
-    settings = load_warehouse_scene_settings()
+    scene_config_path = (
+        WORKSPACE_ROOT / "configs" / "scene_variants_v2.yaml"
+        if args_cli.profile == "v2"
+        else WORKSPACE_ROOT / "configs" / "scene_variants.yaml"
+    )
+    settings = load_warehouse_scene_settings(scene_config_path)
     layout = sample_warehouse_layout(
         settings=settings,
         seed=args_cli.seed,

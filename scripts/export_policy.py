@@ -37,6 +37,16 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Output metadata YAML path. Defaults to the ONNX path with .yaml suffix.",
     )
+    parser.add_argument(
+        "--navigation-config",
+        default=str(NAVIGATION_CONFIG_PATH),
+        help="Navigation YAML used to validate dimensions and action limits.",
+    )
+    parser.add_argument(
+        "--quadrotor-config",
+        default=str(QUADROTOR_CONFIG_PATH),
+        help="Quadrotor/ray sensor YAML used to write observation metadata.",
+    )
     parser.add_argument("--opset", type=int, default=17, help="ONNX opset version.")
     return parser.parse_args()
 
@@ -159,10 +169,10 @@ def section(data: dict[str, Any], name: str) -> dict[str, Any]:
     return value
 
 
-def export_settings(yaml: Any) -> dict[str, Any]:
+def export_settings(yaml: Any, navigation_config_path: Path, quadrotor_config_path: Path) -> dict[str, Any]:
     """Load export-relevant settings from project YAML configs."""
-    navigation = load_yaml_file(yaml, NAVIGATION_CONFIG_PATH)
-    quadrotor = load_yaml_file(yaml, QUADROTOR_CONFIG_PATH)
+    navigation = load_yaml_file(yaml, navigation_config_path)
+    quadrotor = load_yaml_file(yaml, quadrotor_config_path)
     env = section(navigation, "env")
     action = section(navigation, "action")
     sensor = section(quadrotor, "sensor")
@@ -186,17 +196,17 @@ def validate_settings_against_checkpoint(settings: dict[str, Any], checkpoint: d
     scaler = checkpoint["observation_preprocessor"]
     if tuple(policy["net_container.0.weight"].shape) != (256, observation_dim):
         raise ValueError(
-            "navigation.yaml observation_space does not match checkpoint first layer: "
+            "navigation observation_space does not match checkpoint first layer: "
             f"{observation_dim} vs {tuple(policy['net_container.0.weight'].shape)}"
         )
     if tuple(policy["policy_layer.weight"].shape) != (action_dim, 64):
         raise ValueError(
-            "navigation.yaml action_space does not match checkpoint policy layer: "
+            "navigation action_space does not match checkpoint policy layer: "
             f"{action_dim} vs {tuple(policy['policy_layer.weight'].shape)}"
         )
     if tuple(scaler["running_mean"].shape) != (observation_dim,):
         raise ValueError(
-            "navigation.yaml observation_space does not match checkpoint observation scaler: "
+            "navigation observation_space does not match checkpoint observation scaler: "
             f"{observation_dim} vs {tuple(scaler['running_mean'].shape)}"
         )
 
@@ -267,6 +277,8 @@ def main() -> None:
     checkpoint_path = resolve_path(args.checkpoint)
     output_path = resolve_path(args.output)
     metadata_path = make_metadata_path(output_path, args.metadata)
+    navigation_config_path = resolve_path(args.navigation_config)
+    quadrotor_config_path = resolve_path(args.quadrotor_config)
 
     if not checkpoint_path.is_file():
         raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
@@ -276,7 +288,7 @@ def main() -> None:
 
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
     validate_checkpoint(checkpoint)
-    settings = export_settings(yaml)
+    settings = export_settings(yaml, navigation_config_path, quadrotor_config_path)
     validate_settings_against_checkpoint(settings, checkpoint)
     policy = build_policy_module(
         torch,

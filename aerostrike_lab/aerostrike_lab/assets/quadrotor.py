@@ -33,7 +33,7 @@ DEFAULT_VERTICAL_FOV_DEG = (-15.0, 15.0)
 DEFAULT_VERTICAL_CHANNELS = 3
 
 
-@dataclass(frozen=True)
+@dataclass
 class RaySensorSettings:
     """YAML-backed settings used to build the AeroStrike RayCaster."""
 

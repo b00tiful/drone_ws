@@ -9,10 +9,11 @@ Starts the full AeroStrike ROS 2 policy runtime and Isaac bridge from one termin
 
 Options:
   --headless                 Run Isaac without the viewport.
+  --profile NAME             Runtime profile: v1 or v2. Default: v1.
   --stop-on-termination      Exit after the first terminal episode.
   --steps N                  Isaac env steps to run. Default: 4500 (~90s).
   --layout-seed N            Warehouse layout seed. Default: 7.
-  --scene-variant NAME       Scene variant: warehouse or hallway. Default: warehouse.
+  --scene-variant NAME       Scene variant: warehouse, hallway, or long_warehouse. Default: warehouse.
   --camera-mode MODE         Visible camera: third_person, first_person, or free. Default: third_person.
   --camera-distance X        Follow camera distance in meters. Default: 0.40.
   --camera-height X          Follow camera height above drone root. Default: 0.25.
@@ -34,10 +35,12 @@ Examples:
   ./scripts/run_demo.sh --camera-mode first_person
   ./scripts/run_demo.sh --stop-on-termination
   ./scripts/run_demo.sh --headless --steps 2500
+  ./scripts/run_demo.sh --profile v2 --headless --stop-on-termination --steps 6000
 EOF
 }
 
 workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+profile=v1
 steps=4500
 layout_seed=7
 scene_variant=warehouse
@@ -59,6 +62,10 @@ extra_isaac_args=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --profile)
+            profile="$2"
+            shift 2
+            ;;
         --headless)
             visible=false
             shift
@@ -144,6 +151,23 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+case "${profile}" in
+    v1)
+        ;;
+    v2)
+        if [[ "${scene_variant}" == "warehouse" ]]; then
+            scene_variant=long_warehouse
+        fi
+        if [[ "${layout_seed}" == "7" ]]; then
+            layout_seed=101
+        fi
+        ;;
+    *)
+        echo "Invalid profile: ${profile}. Expected v1 or v2." >&2
+        exit 2
+        ;;
+esac
+
 ros_launch_pid=""
 goal_config_file=""
 cleaned_up=false
@@ -227,7 +251,17 @@ fi
 
 echo "[demo] Starting ROS runtime..."
 goal_config_file="$(mktemp /tmp/aerostrike_goal.XXXXXX.yaml)"
-PYTHONPATH="${workspace_root}/aerostrike_lab:${PYTHONPATH:-}" python3 - "${layout_seed}" "${scene_variant}" "${goal_config_file}" <<'PY'
+policy_config_file="${workspace_root}/aerostrike_pkg/config/policy_node.yaml"
+observation_config_file="${workspace_root}/aerostrike_pkg/config/observation_builder.yaml"
+command_config_file="${workspace_root}/aerostrike_pkg/config/command_adapter.yaml"
+scene_config_file="${workspace_root}/configs/scene_variants.yaml"
+if [[ "${profile}" == "v2" ]]; then
+    policy_config_file="${workspace_root}/aerostrike_pkg/config/policy_node_v2.yaml"
+    observation_config_file="${workspace_root}/aerostrike_pkg/config/observation_builder_v2.yaml"
+    command_config_file="${workspace_root}/aerostrike_pkg/config/command_adapter_v2.yaml"
+    scene_config_file="${workspace_root}/configs/scene_variants_v2.yaml"
+fi
+PYTHONPATH="${workspace_root}/aerostrike_lab:${PYTHONPATH:-}" python3 - "${layout_seed}" "${scene_variant}" "${goal_config_file}" "${scene_config_file}" <<'PY'
 import sys
 from pathlib import Path
 
@@ -236,8 +270,9 @@ from aerostrike_lab.scenes.warehouse import load_warehouse_scene_settings, sampl
 layout_seed = int(sys.argv[1])
 scene_variant = sys.argv[2]
 goal_config_path = Path(sys.argv[3])
+scene_config_path = Path(sys.argv[4])
 layout = sample_warehouse_layout(
-    settings=load_warehouse_scene_settings(),
+    settings=load_warehouse_scene_settings(scene_config_path),
     seed=layout_seed,
     scene_variant=scene_variant,
 )
@@ -260,7 +295,11 @@ print(
     f"file={goal_config_path}"
 )
 PY
-setsid ros2 launch aerostrike_pkg policy_runtime.launch.xml goal_config_file:="${goal_config_file}" &
+setsid ros2 launch aerostrike_pkg policy_runtime.launch.xml \
+    goal_config_file:="${goal_config_file}" \
+    policy_config_file:="${policy_config_file}" \
+    observation_config_file:="${observation_config_file}" \
+    command_config_file:="${command_config_file}" &
 ros_launch_pid=$!
 
 sleep "${ros_startup_wait_s}"
@@ -276,6 +315,7 @@ export LD_LIBRARY_PATH="${ISAAC_ROS_BRIDGE}/lib:${LD_LIBRARY_PATH:-}"
 
 isaac_args=(
     -p "${workspace_root}/scripts/run_ros_runtime_sim.py"
+    --profile "${profile}"
     --layout_seed "${layout_seed}"
     --scene_variant "${scene_variant}"
     --camera_mode "${camera_mode}"

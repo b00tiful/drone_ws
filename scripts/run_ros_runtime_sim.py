@@ -21,6 +21,12 @@ from isaaclab.app import AppLauncher
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments before launching Isaac Sim."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--profile",
+        choices=("v1", "v2"),
+        default="v1",
+        help="Runtime profile. v1 preserves the recorded demo path; v2 selects Demo V2 configs.",
+    )
     parser.add_argument("--steps", type=int, default=2500, help="Maximum Isaac env steps to run.")
     parser.add_argument(
         "--stop_on_termination",
@@ -70,7 +76,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--scene_variant",
-        choices=("warehouse", "hallway"),
+        choices=("warehouse", "hallway", "long_warehouse"),
         default="warehouse",
         help="Procedural scene variant to run without changing the policy observation/action contract.",
     )
@@ -148,9 +154,11 @@ from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Float32MultiArray
 
-from aerostrike_lab.assets.quadrotor import AEROSTRIKE_RAY_SENSOR_SETTINGS
 from aerostrike_lab.tasks.navigation.nav_env import AeroStrikeNavigationEnv
-from aerostrike_lab.tasks.navigation.nav_env_cfg import AeroStrikeNavigationEnvCfg
+from aerostrike_lab.tasks.navigation.nav_env_cfg import (
+    AeroStrikeNavigationEnvCfg,
+    AeroStrikeNavigationV2EnvCfg,
+)
 
 
 CameraMode = Literal["free", "third_person", "first_person"]
@@ -457,7 +465,7 @@ class DemoLightFlicker:
 
 def make_env(args: argparse.Namespace) -> AeroStrikeNavigationEnv:
     """Create the single-env warehouse simulation used by the ROS bridge."""
-    cfg = AeroStrikeNavigationEnvCfg()
+    cfg = AeroStrikeNavigationV2EnvCfg() if args.profile == "v2" else AeroStrikeNavigationEnvCfg()
     cfg.scene.num_envs = 1
     cfg.sim.device = args.device if args.device is not None else cfg.sim.device
     cfg.warehouse_scene_variant = args.scene_variant
@@ -510,9 +518,9 @@ def main() -> None:
             if args_cli.demo_robot_marker:
                 marker = DemoRobotMarker(args_cli.demo_robot_marker_radius_m)
                 marker.update(env)
-        if env._ray_caster.num_rays != AEROSTRIKE_RAY_SENSOR_SETTINGS.ray_count:
+        if env._ray_caster.num_rays != env.cfg.ray_sensor_settings.ray_count:
             raise RuntimeError(
-                f"Ray count mismatch: expected {AEROSTRIKE_RAY_SENSOR_SETTINGS.ray_count}, "
+                f"Ray count mismatch: expected {env.cfg.ray_sensor_settings.ray_count}, "
                 f"got {env._ray_caster.num_rays}"
             )
 
@@ -522,7 +530,7 @@ def main() -> None:
             "Isaac runtime bridge ready: "
             f"{args_cli.odom_topic} + {args_cli.ray_distances_topic} -> "
             f"{args_cli.command_topic}, layout_seed={args_cli.layout_seed}, "
-            f"scene_variant={args_cli.scene_variant}"
+            f"scene_variant={args_cli.scene_variant}, profile={args_cli.profile}"
         )
         node.get_logger().info(
             "Simulation start="

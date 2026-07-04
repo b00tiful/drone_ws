@@ -101,7 +101,7 @@ class VisualModelSpec:
 class WarehouseSceneSettings:
     """YAML-backed settings for the procedural warehouse."""
 
-    scene_variant: Literal["warehouse", "hallway"] = DEFAULT_SCENE_VARIANT
+    scene_variant: str = DEFAULT_SCENE_VARIANT
     arena_size_m: tuple[float, float] = DEFAULT_ARENA_SIZE_M
     wall_height_m: float = DEFAULT_WALL_HEIGHT_M
     wall_thickness_m: float = DEFAULT_WALL_THICKNESS_M
@@ -256,9 +256,9 @@ def _as_workspace_path(value: Any, default: Path) -> Path:
     return path if path.is_absolute() else WORKSPACE_ROOT / path
 
 
-def _scene_variant(value: Any, default: Literal["warehouse", "hallway"]) -> Literal["warehouse", "hallway"]:
+def _scene_variant(value: Any, default: str) -> str:
     variant = str(value or default)
-    if variant not in ("warehouse", "hallway"):
+    if variant not in ("warehouse", "hallway", "long_warehouse"):
         return default
     return variant
 
@@ -465,13 +465,13 @@ def sample_warehouse_layout(
     *,
     seed: int | None = None,
     root_prim_path: str = DEFAULT_ROOT_PRIM_PATH,
-    scene_variant: Literal["warehouse", "hallway"] | None = None,
+    scene_variant: str | None = None,
 ) -> WarehouseLayout:
     """Sample a deterministic obstacle layout and start/goal pair."""
     scene_settings = settings or load_warehouse_scene_settings()
     layout_seed = scene_settings.layout_seed if seed is None else seed
     variant = scene_settings.scene_variant if scene_variant is None else scene_variant
-    if variant == "hallway":
+    if variant in ("hallway", "long_warehouse"):
         return sample_hallway_layout(scene_settings, seed=layout_seed, root_prim_path=root_prim_path)
 
     rng = Random(layout_seed)

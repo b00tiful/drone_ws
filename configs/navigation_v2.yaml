@@ -1,0 +1,66 @@
+# Demo V2 navigation configuration.
+# V1 remains on configs/navigation.yaml; this profile is selected by the
+# AeroStrike-Navigation-V2-Direct-v0 task and by the V2 runtime wrapper path.
+
+env:
+  task_id: "AeroStrike-Navigation-V2-Direct-v0"
+  episode_length_s: 12.0
+  action_space: 3
+  observation_space: 65
+  state_space: 0
+  debug_vis: false
+
+sim:
+  physics_dt_s: 0.005
+  decimation: 4
+
+scene:
+  num_envs: 8
+  env_spacing_m: 140.0
+
+robot:
+  prim_path: "/World/envs/env_.*/Robot"
+
+warehouse:
+  root_prim_path: "/World/envs/env_0/Warehouse"
+  mesh_prim_expr: "/World/envs/env_.*/Warehouse"
+  scene_variant: "long_warehouse"
+  scene_config_path: "configs/scene_variants_v2.yaml"
+  layout_seed: 101
+  layout_seeds: [101, 103, 107, 109]
+
+sensor:
+  config_path: "configs/quadrotor_v2.yaml"
+
+action:
+  velocity_limit_mps: 20.0
+  vertical_velocity_limit_mps: 2.0
+
+reset:
+  start_height_m: 0.8
+  goal_height_m: 1.8
+  min_height_m: 0.2
+  max_height_m: 6.0
+
+observation:
+  goal_distance_normalizer_m: 120.0
+
+control:
+  hover_thrust_scale: 1.0
+
+termination:
+  goal_radius_m: 1.5
+  collision_distance_m: 0.45
+  proximity_distance_m: 4.0
+
+reward:
+  progress_weight: 10.0
+  forward_velocity_weight: 0.8
+  proximity_penalty_weight: 3.0
+  collision_penalty: 25.0
+  success_bonus: 40.0
+  instability_penalty_weight: 0.08
+  action_smoothness_penalty_weight: 0.03
+  vertical_velocity_penalty_weight: 0.8
+  alive_penalty: 0.005
+  target_speed_mps: 10.0

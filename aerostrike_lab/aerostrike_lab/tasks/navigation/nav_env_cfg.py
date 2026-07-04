@@ -13,7 +13,11 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 
-from aerostrike_lab.assets.quadrotor import make_quadrotor_cfg
+from aerostrike_lab.assets.quadrotor import (
+    RaySensorSettings,
+    load_ray_sensor_settings,
+    make_quadrotor_cfg,
+)
 
 try:
     import yaml
@@ -23,6 +27,9 @@ except ImportError:  # pragma: no cover - Isaac Lab environments normally includ
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_CONFIG_PATH = WORKSPACE_ROOT / "configs" / "navigation.yaml"
+V2_CONFIG_PATH = WORKSPACE_ROOT / "configs" / "navigation_v2.yaml"
+DEFAULT_RAY_SENSOR_CONFIG_PATH = WORKSPACE_ROOT / "configs" / "quadrotor.yaml"
+DEFAULT_WAREHOUSE_SCENE_CONFIG_PATH = WORKSPACE_ROOT / "configs" / "scene_variants.yaml"
 
 DEFAULT_TASK_ID = "AeroStrike-Navigation-Direct-v0"
 DEFAULT_NUM_ENVS = 16
@@ -80,6 +87,7 @@ class NavigationSettings:
     warehouse_root_prim_path: str = DEFAULT_WAREHOUSE_ROOT_PRIM_PATH
     warehouse_mesh_prim_expr: str = DEFAULT_WAREHOUSE_MESH_PRIM_EXPR
     warehouse_scene_variant: str = DEFAULT_WAREHOUSE_SCENE_VARIANT
+    warehouse_scene_config_path: Path = DEFAULT_WAREHOUSE_SCENE_CONFIG_PATH
     layout_seed: int = DEFAULT_LAYOUT_SEED
     layout_seeds: tuple[int, ...] = DEFAULT_LAYOUT_SEEDS
     action_velocity_limit_mps: float = DEFAULT_ACTION_VELOCITY_LIMIT_MPS
@@ -104,6 +112,7 @@ class NavigationSettings:
     alive_penalty: float = DEFAULT_ALIVE_PENALTY
     target_speed_mps: float = DEFAULT_TARGET_SPEED_MPS
     debug_vis: bool = DEFAULT_DEBUG_VIS
+    ray_sensor_config_path: Path = DEFAULT_RAY_SENSOR_CONFIG_PATH
 
 
 def _as_section(data: dict[str, Any], key: str) -> dict[str, Any]:
@@ -138,6 +147,15 @@ def load_navigation_settings(config_path: Path | str = DEFAULT_CONFIG_PATH) -> N
     control = _as_section(data, "control")
     termination = _as_section(data, "termination")
     reward = _as_section(data, "reward")
+    sensor = _as_section(data, "sensor")
+    ray_sensor_config_path = Path(sensor.get("config_path", DEFAULT_RAY_SENSOR_CONFIG_PATH))
+    if not ray_sensor_config_path.is_absolute():
+        ray_sensor_config_path = WORKSPACE_ROOT / ray_sensor_config_path
+    warehouse_scene_config_path = Path(
+        warehouse.get("scene_config_path", DEFAULT_WAREHOUSE_SCENE_CONFIG_PATH)
+    )
+    if not warehouse_scene_config_path.is_absolute():
+        warehouse_scene_config_path = WORKSPACE_ROOT / warehouse_scene_config_path
 
     return NavigationSettings(
         task_id=str(env.get("task_id", DEFAULT_TASK_ID)),
@@ -153,6 +171,7 @@ def load_navigation_settings(config_path: Path | str = DEFAULT_CONFIG_PATH) -> N
         warehouse_root_prim_path=str(warehouse.get("root_prim_path", DEFAULT_WAREHOUSE_ROOT_PRIM_PATH)),
         warehouse_mesh_prim_expr=str(warehouse.get("mesh_prim_expr", DEFAULT_WAREHOUSE_MESH_PRIM_EXPR)),
         warehouse_scene_variant=str(warehouse.get("scene_variant", DEFAULT_WAREHOUSE_SCENE_VARIANT)),
+        warehouse_scene_config_path=warehouse_scene_config_path,
         layout_seed=int(warehouse.get("layout_seed", DEFAULT_LAYOUT_SEED)),
         layout_seeds=_as_int_tuple(warehouse.get("layout_seeds"), DEFAULT_LAYOUT_SEEDS),
         action_velocity_limit_mps=float(action.get("velocity_limit_mps", DEFAULT_ACTION_VELOCITY_LIMIT_MPS)),
@@ -185,11 +204,16 @@ def load_navigation_settings(config_path: Path | str = DEFAULT_CONFIG_PATH) -> N
         alive_penalty=float(reward.get("alive_penalty", DEFAULT_ALIVE_PENALTY)),
         target_speed_mps=float(reward.get("target_speed_mps", DEFAULT_TARGET_SPEED_MPS)),
         debug_vis=bool(env.get("debug_vis", DEFAULT_DEBUG_VIS)),
+        ray_sensor_config_path=ray_sensor_config_path,
     )
 
 
 AEROSTRIKE_NAVIGATION_SETTINGS = load_navigation_settings()
+AEROSTRIKE_NAVIGATION_V2_SETTINGS = load_navigation_settings(V2_CONFIG_PATH)
 _NAV_SETTINGS = AEROSTRIKE_NAVIGATION_SETTINGS
+_V2_NAV_SETTINGS = AEROSTRIKE_NAVIGATION_V2_SETTINGS
+_RAY_SENSOR_SETTINGS = load_ray_sensor_settings(_NAV_SETTINGS.ray_sensor_config_path)
+_V2_RAY_SENSOR_SETTINGS = load_ray_sensor_settings(_V2_NAV_SETTINGS.ray_sensor_config_path)
 
 
 @configclass
@@ -227,6 +251,7 @@ class AeroStrikeNavigationEnvCfg(DirectRLEnvCfg):
     warehouse_root_prim_path = _NAV_SETTINGS.warehouse_root_prim_path
     warehouse_mesh_prim_expr = _NAV_SETTINGS.warehouse_mesh_prim_expr
     warehouse_scene_variant = _NAV_SETTINGS.warehouse_scene_variant
+    warehouse_scene_config_path = _NAV_SETTINGS.warehouse_scene_config_path
     warehouse_layout_seed = _NAV_SETTINGS.layout_seed
     warehouse_layout_seeds = _NAV_SETTINGS.layout_seeds
     action_velocity_limit_mps = _NAV_SETTINGS.action_velocity_limit_mps
@@ -250,11 +275,76 @@ class AeroStrikeNavigationEnvCfg(DirectRLEnvCfg):
     vertical_velocity_penalty_weight = _NAV_SETTINGS.vertical_velocity_penalty_weight
     alive_penalty = _NAV_SETTINGS.alive_penalty
     target_speed_mps = _NAV_SETTINGS.target_speed_mps
+    ray_sensor_settings: RaySensorSettings = _RAY_SENSOR_SETTINGS
+
+
+@configclass
+class AeroStrikeNavigationV2EnvCfg(DirectRLEnvCfg):
+    """Configuration for the additive Demo V2 DirectRLEnv track."""
+
+    episode_length_s = _V2_NAV_SETTINGS.episode_length_s
+    decimation = _V2_NAV_SETTINGS.decimation
+    action_space = _V2_NAV_SETTINGS.action_space
+    observation_space = _V2_NAV_SETTINGS.observation_space
+    state_space = _V2_NAV_SETTINGS.state_space
+    debug_vis = _V2_NAV_SETTINGS.debug_vis
+    num_rerenders_on_reset = 1
+
+    sim: SimulationCfg = SimulationCfg(
+        dt=_V2_NAV_SETTINGS.physics_dt_s,
+        render_interval=decimation,
+        physics_material=sim_utils.RigidBodyMaterialCfg(
+            friction_combine_mode="multiply",
+            restitution_combine_mode="multiply",
+            static_friction=1.0,
+            dynamic_friction=1.0,
+            restitution=0.0,
+        ),
+    )
+
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(
+        num_envs=_V2_NAV_SETTINGS.num_envs,
+        env_spacing=_V2_NAV_SETTINGS.env_spacing_m,
+        replicate_physics=True,
+        clone_in_fabric=False,
+    )
+
+    robot: ArticulationCfg = make_quadrotor_cfg(prim_path=_V2_NAV_SETTINGS.robot_prim_path)
+    warehouse_root_prim_path = _V2_NAV_SETTINGS.warehouse_root_prim_path
+    warehouse_mesh_prim_expr = _V2_NAV_SETTINGS.warehouse_mesh_prim_expr
+    warehouse_scene_variant = _V2_NAV_SETTINGS.warehouse_scene_variant
+    warehouse_scene_config_path = _V2_NAV_SETTINGS.warehouse_scene_config_path
+    warehouse_layout_seed = _V2_NAV_SETTINGS.layout_seed
+    warehouse_layout_seeds = _V2_NAV_SETTINGS.layout_seeds
+    action_velocity_limit_mps = _V2_NAV_SETTINGS.action_velocity_limit_mps
+    action_vertical_velocity_limit_mps = _V2_NAV_SETTINGS.action_vertical_velocity_limit_mps
+    start_height_m = _V2_NAV_SETTINGS.start_height_m
+    goal_height_m = _V2_NAV_SETTINGS.goal_height_m
+    min_height_m = _V2_NAV_SETTINGS.min_height_m
+    max_height_m = _V2_NAV_SETTINGS.max_height_m
+    goal_distance_normalizer_m = _V2_NAV_SETTINGS.goal_distance_normalizer_m
+    hover_thrust_scale = _V2_NAV_SETTINGS.hover_thrust_scale
+    goal_radius_m = _V2_NAV_SETTINGS.goal_radius_m
+    collision_distance_m = _V2_NAV_SETTINGS.collision_distance_m
+    proximity_distance_m = _V2_NAV_SETTINGS.proximity_distance_m
+    progress_weight = _V2_NAV_SETTINGS.progress_weight
+    forward_velocity_weight = _V2_NAV_SETTINGS.forward_velocity_weight
+    proximity_penalty_weight = _V2_NAV_SETTINGS.proximity_penalty_weight
+    collision_penalty = _V2_NAV_SETTINGS.collision_penalty
+    success_bonus = _V2_NAV_SETTINGS.success_bonus
+    instability_penalty_weight = _V2_NAV_SETTINGS.instability_penalty_weight
+    action_smoothness_penalty_weight = _V2_NAV_SETTINGS.action_smoothness_penalty_weight
+    vertical_velocity_penalty_weight = _V2_NAV_SETTINGS.vertical_velocity_penalty_weight
+    alive_penalty = _V2_NAV_SETTINGS.alive_penalty
+    target_speed_mps = _V2_NAV_SETTINGS.target_speed_mps
+    ray_sensor_settings: RaySensorSettings = _V2_RAY_SENSOR_SETTINGS
 
 
 __all__ = [
     "AEROSTRIKE_NAVIGATION_SETTINGS",
+    "AEROSTRIKE_NAVIGATION_V2_SETTINGS",
     "AeroStrikeNavigationEnvCfg",
+    "AeroStrikeNavigationV2EnvCfg",
     "NavigationSettings",
     "load_navigation_settings",
 ]

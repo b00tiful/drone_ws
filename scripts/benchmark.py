@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import atexit
+import os
 import random
 import sys
 from pathlib import Path
@@ -44,6 +46,28 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
         choices=["torch", "jax"],
         help="skrl backend.",
     )
+    parser.add_argument("--min_success_rate", type=float, default=None, help="Fail if success rate is below this.")
+    parser.add_argument("--max_collision_rate", type=float, default=None, help="Fail if collision rate is above this.")
+    parser.add_argument("--max_timeout_rate", type=float, default=None, help="Fail if timeout rate is above this.")
+    parser.add_argument("--min_mean_speed", type=float, default=None, help="Fail if mean speed is below this m/s.")
+    parser.add_argument(
+        "--min_mean_forward_speed",
+        type=float,
+        default=None,
+        help="Fail if mean forward speed is below this m/s.",
+    )
+    parser.add_argument(
+        "--max_mean_final_goal_distance",
+        type=float,
+        default=None,
+        help="Fail if mean final goal distance is above this meters.",
+    )
+    parser.add_argument(
+        "--min_mean_min_ray_distance",
+        type=float,
+        default=None,
+        help="Fail if mean minimum ray distance is below this meters.",
+    )
     AppLauncher.add_app_launcher_args(parser)
     parser.set_defaults(headless=True)
     return parser.parse_known_args()
@@ -74,12 +98,40 @@ def resolve_checkpoint_path(path_text: str) -> Path:
     raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
 
 
+def check_minimum(name: str, value: float, threshold: float | None, failures: list[str]) -> None:
+    """Append a gate failure if a metric is below its minimum threshold."""
+    if threshold is not None and value < threshold:
+        failures.append(f"{name} {value:.3f} < {threshold:.3f}")
+
+
+def check_maximum(name: str, value: float, threshold: float | None, failures: list[str]) -> None:
+    """Append a gate failure if a metric is above its maximum threshold."""
+    if threshold is not None and value > threshold:
+        failures.append(f"{name} {value:.3f} > {threshold:.3f}")
+
+
 args_cli, hydra_args_cli = parse_args()
 checkpoint_path_cli = resolve_checkpoint_path(args_cli.checkpoint)
 sys.argv = [sys.argv[0]] + hydra_args_cli
 
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
+
+_BENCHMARK_COMPLETE = False
+
+
+def _enforce_benchmark_exit_status() -> None:
+    """Make early Isaac/Python shutdown fail the benchmark gate."""
+    if not _BENCHMARK_COMPLETE:
+        print(
+            "[ERROR]: AeroStrike benchmark exited before metrics completed.",
+            file=sys.stderr,
+            flush=True,
+        )
+        os._exit(1)
+
+
+atexit.register(_enforce_benchmark_exit_status)
 
 import gymnasium as gym
 import skrl
@@ -103,6 +155,7 @@ SKRL_VERSION = "2.0.0"
 @hydra_task_config(args_cli.task, "skrl_cfg_entry_point")
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> None:
     """Load a checkpoint, run evaluation episodes, and print aggregate metrics."""
+    global _BENCHMARK_COMPLETE
     if version.parse(skrl.__version__) < version.parse(SKRL_VERSION):
         raise RuntimeError(f"Unsupported skrl version {skrl.__version__}; expected >= {SKRL_VERSION}")
     if args_cli.episodes <= 0:
@@ -189,26 +242,80 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
         if completed == 0:
             raise RuntimeError("No episodes completed before max_steps; increase --max_steps or lower --episodes")
 
-        print("[INFO]: AeroStrike benchmark complete.")
-        print(f"[INFO]: Checkpoint: {checkpoint_path_cli}")
-        print(f"[INFO]: Seed: {args_cli.seed}")
-        print(f"[INFO]: Layout seed: {raw_env.unwrapped.cfg.warehouse_layout_seed}")
-        print(f"[INFO]: Num envs: {raw_env.unwrapped.num_envs}")
-        print(f"[INFO]: Vectorized steps: {steps}")
-        print(f"[INFO]: Episodes completed: {completed}")
-        print(f"[INFO]: Successes: {successes}")
-        print(f"[INFO]: Collisions: {collisions}")
-        print(f"[INFO]: Timeouts: {timeouts}")
-        print(f"[INFO]: Other terminations: {other_terminations}")
-        print(f"[INFO]: Success rate: {successes / completed:.3f}")
-        print(f"[INFO]: Collision rate: {collisions / completed:.3f}")
-        print(f"[INFO]: Timeout rate: {timeouts / completed:.3f}")
-        print(f"[INFO]: Mean speed m/s: {speed_sum / max(speed_samples, 1):.3f}")
-        print(f"[INFO]: Mean forward speed m/s: {forward_speed_sum / max(speed_samples, 1):.3f}")
-        print(f"[INFO]: Mean vertical speed m/s: {vertical_speed_sum / max(speed_samples, 1):.3f}")
-        print(f"[INFO]: Mean final goal distance m: {final_goal_distance_sum / completed:.3f}")
-        print(f"[INFO]: Mean min ray distance m: {min_ray_distance_sum / completed:.3f}")
-        print(f"[INFO]: Mean reward per env-step: {reward_sum / max(steps * raw_env.unwrapped.num_envs, 1):.3f}")
+        success_rate = successes / completed
+        collision_rate = collisions / completed
+        timeout_rate = timeouts / completed
+        mean_speed = speed_sum / max(speed_samples, 1)
+        mean_forward_speed = forward_speed_sum / max(speed_samples, 1)
+        mean_vertical_speed = vertical_speed_sum / max(speed_samples, 1)
+        mean_final_goal_distance = final_goal_distance_sum / completed
+        mean_min_ray_distance = min_ray_distance_sum / completed
+        mean_reward_per_env_step = reward_sum / max(steps * raw_env.unwrapped.num_envs, 1)
+
+        print("[INFO]: AeroStrike benchmark complete.", flush=True)
+        print(f"[INFO]: Checkpoint: {checkpoint_path_cli}", flush=True)
+        print(f"[INFO]: Seed: {args_cli.seed}", flush=True)
+        print(f"[INFO]: Layout seed: {raw_env.unwrapped.cfg.warehouse_layout_seed}", flush=True)
+        print(f"[INFO]: Num envs: {raw_env.unwrapped.num_envs}", flush=True)
+        print(f"[INFO]: Vectorized steps: {steps}", flush=True)
+        print(f"[INFO]: Episodes completed: {completed}", flush=True)
+        print(f"[INFO]: Successes: {successes}", flush=True)
+        print(f"[INFO]: Collisions: {collisions}", flush=True)
+        print(f"[INFO]: Timeouts: {timeouts}", flush=True)
+        print(f"[INFO]: Other terminations: {other_terminations}", flush=True)
+        print(f"[INFO]: Success rate: {success_rate:.3f}", flush=True)
+        print(f"[INFO]: Collision rate: {collision_rate:.3f}", flush=True)
+        print(f"[INFO]: Timeout rate: {timeout_rate:.3f}", flush=True)
+        print(f"[INFO]: Mean speed m/s: {mean_speed:.3f}", flush=True)
+        print(f"[INFO]: Mean forward speed m/s: {mean_forward_speed:.3f}", flush=True)
+        print(f"[INFO]: Mean vertical speed m/s: {mean_vertical_speed:.3f}", flush=True)
+        print(f"[INFO]: Mean final goal distance m: {mean_final_goal_distance:.3f}", flush=True)
+        print(f"[INFO]: Mean min ray distance m: {mean_min_ray_distance:.3f}", flush=True)
+        print(f"[INFO]: Mean reward per env-step: {mean_reward_per_env_step:.3f}", flush=True)
+
+        gate_failures: list[str] = []
+        check_minimum("success rate", success_rate, args_cli.min_success_rate, gate_failures)
+        check_maximum("collision rate", collision_rate, args_cli.max_collision_rate, gate_failures)
+        check_maximum("timeout rate", timeout_rate, args_cli.max_timeout_rate, gate_failures)
+        check_minimum("mean speed", mean_speed, args_cli.min_mean_speed, gate_failures)
+        check_minimum(
+            "mean forward speed",
+            mean_forward_speed,
+            args_cli.min_mean_forward_speed,
+            gate_failures,
+        )
+        check_maximum(
+            "mean final goal distance",
+            mean_final_goal_distance,
+            args_cli.max_mean_final_goal_distance,
+            gate_failures,
+        )
+        check_minimum(
+            "mean min ray distance",
+            mean_min_ray_distance,
+            args_cli.min_mean_min_ray_distance,
+            gate_failures,
+        )
+        if gate_failures:
+            _BENCHMARK_COMPLETE = True
+            print("[ERROR]: Benchmark gate failed:", flush=True)
+            for failure in gate_failures:
+                print(f"[ERROR]: - {failure}", flush=True)
+            raise RuntimeError(f"Benchmark gate failed: {'; '.join(gate_failures)}")
+        if any(
+            threshold is not None
+            for threshold in (
+                args_cli.min_success_rate,
+                args_cli.max_collision_rate,
+                args_cli.max_timeout_rate,
+                args_cli.min_mean_speed,
+                args_cli.min_mean_forward_speed,
+                args_cli.max_mean_final_goal_distance,
+                args_cli.min_mean_min_ray_distance,
+            )
+        ):
+            print("[INFO]: Benchmark gate passed.", flush=True)
+        _BENCHMARK_COMPLETE = True
     finally:
         env.close()
 
@@ -216,5 +323,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
 if __name__ == "__main__":
     try:
         main()
+        if not _BENCHMARK_COMPLETE:
+            raise RuntimeError("AeroStrike benchmark exited before metrics completed")
     finally:
         simulation_app.close()

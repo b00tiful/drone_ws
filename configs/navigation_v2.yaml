@@ -59,6 +59,8 @@ reward:
   proximity_penalty_weight: 3.0
   collision_penalty: 25.0
   success_bonus: 40.0
+  goal_entry_distance_m: 12.0
+  goal_entry_progress_weight: 20.0
   instability_penalty_weight: 0.08
   action_smoothness_penalty_weight: 0.03
   vertical_velocity_penalty_weight: 0.8

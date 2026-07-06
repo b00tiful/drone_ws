@@ -64,6 +64,7 @@ DEFAULT_COLLISION_PENALTY = 10.0
 DEFAULT_SUCCESS_BONUS = 20.0
 DEFAULT_GOAL_ENTRY_DISTANCE_M = DEFAULT_GOAL_RADIUS_M
 DEFAULT_GOAL_ENTRY_PROGRESS_WEIGHT = 0.0
+DEFAULT_GOAL_ENTRY_PROGRESS_RAMP_STEPS = 0
 DEFAULT_INSTABILITY_PENALTY_WEIGHT = 0.05
 DEFAULT_ACTION_SMOOTHNESS_PENALTY_WEIGHT = 0.02
 DEFAULT_VERTICAL_VELOCITY_PENALTY_WEIGHT = 1.0
@@ -110,6 +111,7 @@ class NavigationSettings:
     success_bonus: float = DEFAULT_SUCCESS_BONUS
     goal_entry_distance_m: float = DEFAULT_GOAL_ENTRY_DISTANCE_M
     goal_entry_progress_weight: float = DEFAULT_GOAL_ENTRY_PROGRESS_WEIGHT
+    goal_entry_progress_ramp_steps: int = DEFAULT_GOAL_ENTRY_PROGRESS_RAMP_STEPS
     instability_penalty_weight: float = DEFAULT_INSTABILITY_PENALTY_WEIGHT
     action_smoothness_penalty_weight: float = DEFAULT_ACTION_SMOOTHNESS_PENALTY_WEIGHT
     vertical_velocity_penalty_weight: float = DEFAULT_VERTICAL_VELOCITY_PENALTY_WEIGHT
@@ -202,6 +204,10 @@ def load_navigation_settings(config_path: Path | str = DEFAULT_CONFIG_PATH) -> N
         goal_entry_progress_weight=float(
             reward.get("goal_entry_progress_weight", DEFAULT_GOAL_ENTRY_PROGRESS_WEIGHT)
         ),
+        goal_entry_progress_ramp_steps=max(
+            int(reward.get("goal_entry_progress_ramp_steps", DEFAULT_GOAL_ENTRY_PROGRESS_RAMP_STEPS)),
+            0,
+        ),
         instability_penalty_weight=float(reward.get("instability_penalty_weight", DEFAULT_INSTABILITY_PENALTY_WEIGHT)),
         action_smoothness_penalty_weight=float(
             reward.get("action_smoothness_penalty_weight", DEFAULT_ACTION_SMOOTHNESS_PENALTY_WEIGHT)
@@ -280,6 +286,7 @@ class AeroStrikeNavigationEnvCfg(DirectRLEnvCfg):
     success_bonus = _NAV_SETTINGS.success_bonus
     goal_entry_distance_m = _NAV_SETTINGS.goal_entry_distance_m
     goal_entry_progress_weight = _NAV_SETTINGS.goal_entry_progress_weight
+    goal_entry_progress_ramp_steps = _NAV_SETTINGS.goal_entry_progress_ramp_steps
     instability_penalty_weight = _NAV_SETTINGS.instability_penalty_weight
     action_smoothness_penalty_weight = _NAV_SETTINGS.action_smoothness_penalty_weight
     vertical_velocity_penalty_weight = _NAV_SETTINGS.vertical_velocity_penalty_weight
@@ -344,6 +351,7 @@ class AeroStrikeNavigationV2EnvCfg(DirectRLEnvCfg):
     success_bonus = _V2_NAV_SETTINGS.success_bonus
     goal_entry_distance_m = _V2_NAV_SETTINGS.goal_entry_distance_m
     goal_entry_progress_weight = _V2_NAV_SETTINGS.goal_entry_progress_weight
+    goal_entry_progress_ramp_steps = _V2_NAV_SETTINGS.goal_entry_progress_ramp_steps
     instability_penalty_weight = _V2_NAV_SETTINGS.instability_penalty_weight
     action_smoothness_penalty_weight = _V2_NAV_SETTINGS.action_smoothness_penalty_weight
     vertical_velocity_penalty_weight = _V2_NAV_SETTINGS.vertical_velocity_penalty_weight

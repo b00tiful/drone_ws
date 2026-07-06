@@ -60,7 +60,8 @@ reward:
   collision_penalty: 25.0
   success_bonus: 40.0
   goal_entry_distance_m: 12.0
-  goal_entry_progress_weight: 20.0
+  goal_entry_progress_weight: 5.0
+  goal_entry_progress_ramp_steps: 3200
   instability_penalty_weight: 0.08
   action_smoothness_penalty_weight: 0.03
   vertical_velocity_penalty_weight: 0.8

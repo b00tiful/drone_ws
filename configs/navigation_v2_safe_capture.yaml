@@ -1,10 +1,9 @@
-# Demo V2 navigation configuration.
-# V1 remains on configs/navigation.yaml; this profile is selected by the
-# AeroStrike-Navigation-V2-Direct-v0 task and by the V2 runtime wrapper path.
+# Demo V2 Stage 1 safe-capture curriculum configuration.
+# This profile is isolated from the full-length navigation_v2.yaml task.
 
 env:
-  task_id: "AeroStrike-Navigation-V2-Direct-v0"
-  episode_length_s: 12.0
+  task_id: "AeroStrike-Navigation-V2-Safe-Capture-Direct-v0"
+  episode_length_s: 14.0
   action_space: 3
   observation_space: 65
   state_space: 0
@@ -15,8 +14,8 @@ sim:
   decimation: 4
 
 scene:
-  num_envs: 8
-  env_spacing_m: 140.0
+  num_envs: 128
+  env_spacing_m: 80.0
 
 robot:
   prim_path: "/World/envs/env_.*/Robot"
@@ -25,7 +24,7 @@ warehouse:
   root_prim_path: "/World/envs/env_0/Warehouse"
   mesh_prim_expr: "/World/envs/env_.*/Warehouse"
   scene_variant: "long_warehouse"
-  scene_config_path: "configs/scene_variants_v2.yaml"
+  scene_config_path: "configs/scene_variants_v2_safe_capture.yaml"
   layout_seed: 101
   layout_seeds: [101, 103, 107, 109]
 
@@ -33,7 +32,7 @@ sensor:
   config_path: "configs/quadrotor_v2.yaml"
 
 action:
-  velocity_limit_mps: 20.0
+  velocity_limit_mps: 10.0
   vertical_velocity_limit_mps: 2.0
 
 reset:
@@ -43,7 +42,7 @@ reset:
   max_height_m: 6.0
 
 observation:
-  goal_distance_normalizer_m: 120.0
+  goal_distance_normalizer_m: 60.0
 
 control:
   hover_thrust_scale: 1.0
@@ -60,11 +59,11 @@ reward:
   collision_penalty: 25.0
   success_bonus: 40.0
   goal_entry_distance_m: 12.0
-  goal_entry_progress_weight: 5.0
-  goal_entry_progress_ramp_steps: 3200
+  goal_entry_progress_weight: 0.0
+  goal_entry_progress_ramp_steps: 0
   instability_penalty_weight: 0.08
   action_smoothness_penalty_weight: 0.03
   vertical_velocity_penalty_weight: 0.8
   alive_penalty: 0.005
-  target_speed_mps: 10.0
-  overspeed_penalty_weight: 0.0
+  target_speed_mps: 6.0
+  overspeed_penalty_weight: 5.0

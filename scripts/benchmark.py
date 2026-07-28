@@ -296,6 +296,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
                             "collisions": 0.0,
                             "timeouts": 0.0,
                             "other_terminations": 0.0,
+                            "min_ray_distance_sum": 0.0,
                             "closest_goal_distance_sum": 0.0,
                             "speed_at_closest_goal_sum": 0.0,
                             "saturated_action_components": 0.0,
@@ -307,6 +308,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
                     layout_result["collisions"] += float(collision)
                     layout_result["timeouts"] += float(timeout)
                     layout_result["other_terminations"] += float(other_termination)
+                    layout_result["min_ray_distance_sum"] += min_ray_distance
                     layout_result["closest_goal_distance_sum"] += closest_goal_distance
                     layout_result["speed_at_closest_goal_sum"] += speed_at_closest_goal
                     layout_result["saturated_action_components"] += episode_saturated_actions
@@ -400,6 +402,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
                 f"collision_rate={result['collisions'] / layout_episodes:.3f} "
                 f"timeout_rate={result['timeouts'] / layout_episodes:.3f} "
                 f"other_rate={result['other_terminations'] / layout_episodes:.3f} "
+                f"mean_min_ray_distance_m="
+                f"{result['min_ray_distance_sum'] / layout_episodes:.3f} "
                 f"mean_closest_goal_distance_m="
                 f"{result['closest_goal_distance_sum'] / layout_episodes:.3f} "
                 f"mean_speed_at_closest_goal_mps="
@@ -432,6 +436,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
             args_cli.min_mean_min_ray_distance,
             gate_failures,
         )
+        for layout_seed, result in sorted(layout_results.items()):
+            layout_episodes = result["episodes"]
+            check_minimum(
+                f"layout seed {layout_seed} mean min ray distance",
+                result["min_ray_distance_sum"] / layout_episodes,
+                args_cli.min_mean_min_ray_distance,
+                gate_failures,
+            )
         if gate_failures:
             _BENCHMARK_COMPLETE = True
             print("[ERROR]: Benchmark gate failed:", flush=True)

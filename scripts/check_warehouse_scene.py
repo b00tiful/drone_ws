@@ -20,7 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--profile",
-        choices=("v1", "v2"),
+        choices=("v1", "v2", "v2-safe-capture"),
         default="v1",
         help="Scene config profile to smoke-check.",
     )
@@ -56,11 +56,12 @@ def main() -> None:
     sim = SimulationContext(sim_cfg)
     sim.set_camera_view(eye=[13.0, 13.0, 9.0], target=[0.0, 0.0, 1.0])
 
-    scene_config_path = (
-        WORKSPACE_ROOT / "configs" / "scene_variants_v2.yaml"
-        if args_cli.profile == "v2"
-        else WORKSPACE_ROOT / "configs" / "scene_variants.yaml"
-    )
+    if args_cli.profile == "v2":
+        scene_config_path = WORKSPACE_ROOT / "configs" / "scene_variants_v2.yaml"
+    elif args_cli.profile == "v2-safe-capture":
+        scene_config_path = WORKSPACE_ROOT / "configs" / "scene_variants_v2_safe_capture.yaml"
+    else:
+        scene_config_path = WORKSPACE_ROOT / "configs" / "scene_variants.yaml"
     settings = load_warehouse_scene_settings(scene_config_path)
     layout = sample_warehouse_layout(
         settings=settings,

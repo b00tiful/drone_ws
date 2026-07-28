@@ -53,6 +53,7 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
                 "progress",
                 "goal_entry",
                 "forward_velocity",
+                "overspeed",
                 "proximity",
                 "collision",
                 "success",
@@ -254,6 +255,7 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
             )
         forward_velocity = torch.sum(self._robot.data.root_lin_vel_w * goal_direction_w, dim=1).clamp_min(0.0)
         speed_score = (forward_velocity / self.cfg.target_speed_mps).clamp(0.0, 1.5)
+        overspeed = (forward_velocity - self.cfg.target_speed_mps).clamp_min(0.0)
 
         ray_distances_m = self._get_ray_distances_m()
         self._min_ray_distance_m = ray_distances_m.min(dim=1).values
@@ -294,6 +296,7 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
             "progress": self.cfg.progress_weight * progress,
             "goal_entry": goal_entry_weight * goal_entry_progress,
             "forward_velocity": self.cfg.forward_velocity_weight * speed_score * self.step_dt,
+            "overspeed": -self.cfg.overspeed_penalty_weight * overspeed.square() * self.step_dt,
             "proximity": -self.cfg.proximity_penalty_weight * proximity_ratio.square() * self.step_dt,
             "collision": -self.cfg.collision_penalty * self._collision.float(),
             "success": self.cfg.success_bonus * self._reached_goal.float(),

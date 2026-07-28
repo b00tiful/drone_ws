@@ -1,0 +1,84 @@
+# Demo V2 Stage 1 safe-capture scene configuration.
+# The 50 m route and 16 side-biased obstacles provide low/medium density.
+
+warehouse:
+  scene_variant: "long_warehouse"
+  arena_size_m: [18.0, 60.0]
+  wall_height_m: 6.0
+  wall_thickness_m: 0.3
+  floor_thickness_m: 0.1
+  obstacle_count_range: [12, 18]
+  pillar_count_range: [0, 0]
+  box_size_range_m: [0.8, 3.2]
+  obstacle_height_range_m: [1.2, 5.0]
+  pillar_radius_range_m: [0.25, 0.65]
+  min_start_goal_distance_m: 40.0
+  target_altitude_m: 1.8
+  start_goal_clearance_m: 3.0
+  obstacle_clearance_m: 1.0
+  boundary_margin_m: 1.5
+  layout_seed: 101
+  box_yaw_range_degrees: [0.0, 180.0]
+  sampling_attempts: 300
+  materials:
+    floor_color: [0.12, 0.13, 0.13]
+    wall_color: [0.42, 0.46, 0.48]
+    box_color: [0.48, 0.38, 0.24]
+    pillar_color: [0.34, 0.37, 0.38]
+    route_marking_color: [0.95, 0.72, 0.18]
+    safety_stripe_color: [0.05, 0.06, 0.06]
+    light_fixture_color: [0.86, 0.91, 0.84]
+    side_clutter_color: [0.30, 0.25, 0.18]
+    ceiling_beam_color: [0.18, 0.20, 0.21]
+    textures_enabled: false
+    texture_root: "assets/textures/polyhaven"
+    floor_texture_id: "concrete_floor_worn_001"
+    wall_texture_id: "concrete_floor_worn_001"
+    box_texture_id: "metal_plate"
+    pillar_texture_id: "metal_plate"
+  lighting:
+    intensity: 900.0
+    ambient_intensity_scale: 0.15
+    global_intensity_scale: 0.25
+    fixture_intensity_scale: 0.0
+    fixture_radius_m: 0.28
+    fixture_cone_angle_degrees: 28.0
+    fixture_cone_softness: 0.10
+    fixture_focus: 0.70
+    color: [0.55, 0.64, 0.76]
+  visuals:
+    mode: "bright"
+    side_clutter_count: 0
+    side_clutter_size_m: [0.90, 0.60, 0.52]
+    side_clutter_margin_m: 1.2
+    ceiling_beam_count: 0
+    ceiling_beam_depth_m: 0.10
+    ceiling_beam_height_m: 0.08
+    ceiling_beam_top_offset_m: 0.08
+    models:
+      asset_root: "assets/models/kenney_factory_kit"
+      usd_cache_dir: "assets/models/kenney_factory_kit/usd_cache"
+      count: 0
+      scale: 0.40
+      side_margin_m: 1.7
+      route_clearance_m: 2.7
+      edge_clearance_m: 1.8
+      y_jitter_m: 0.45
+      assets: []
+  hallway:
+    arena_size_m: [18.0, 60.0]
+    obstacle_count: 16
+    start_y_m: -25.0
+    goal_y_m: 25.0
+    lane_x_range_m: [-1.5, 1.5]
+    obstacle_x_range_m: [-7.0, 7.0]
+    center_clearance_m: 1.8
+    obstacle_y_margin_m: 5.0
+    obstacle_spacing_m: 2.4
+
+sensor:
+  ray_count: 48
+  min_range_m: 0.2
+  max_range_m: 40.0
+  azimuth_degrees: [-170.0, 170.0]
+  elevation_degrees: [-20.0, 20.0]

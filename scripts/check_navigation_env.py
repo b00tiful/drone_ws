@@ -22,7 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--profile",
-        choices=("v1", "v2"),
+        choices=("v1", "v2", "v2-safe-capture"),
         default="v1",
         help="Environment profile to smoke-check.",
     )
@@ -78,6 +78,7 @@ import torch
 from aerostrike_lab.tasks.navigation.nav_env import AeroStrikeNavigationEnv
 from aerostrike_lab.tasks.navigation.nav_env_cfg import (
     AeroStrikeNavigationEnvCfg,
+    AeroStrikeNavigationV2SafeCaptureEnvCfg,
     AeroStrikeNavigationV2EnvCfg,
 )
 from isaaclab.utils.math import subtract_frame_transforms
@@ -86,7 +87,12 @@ from isaaclab.utils.math import subtract_frame_transforms
 def main() -> None:
     """Create, reset, and step the navigation environment."""
     global _VALIDATION_COMPLETE
-    cfg = AeroStrikeNavigationV2EnvCfg() if args_cli.profile == "v2" else AeroStrikeNavigationEnvCfg()
+    if args_cli.profile == "v2":
+        cfg = AeroStrikeNavigationV2EnvCfg()
+    elif args_cli.profile == "v2-safe-capture":
+        cfg = AeroStrikeNavigationV2SafeCaptureEnvCfg()
+    else:
+        cfg = AeroStrikeNavigationEnvCfg()
     cfg.scene.num_envs = args_cli.num_envs
     cfg.sim.device = args_cli.device
     env = AeroStrikeNavigationEnv(cfg)

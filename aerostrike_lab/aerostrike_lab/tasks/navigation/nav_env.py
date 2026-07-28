@@ -62,6 +62,56 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
                 "alive",
             ]
         }
+        self._episode_closest_goal_distance_m = torch.full(
+            (self.num_envs,),
+            torch.inf,
+            dtype=torch.float,
+            device=self.device,
+        )
+        self._episode_speed_at_closest_goal_mps = torch.zeros(
+            self.num_envs,
+            dtype=torch.float,
+            device=self.device,
+        )
+        self._episode_min_ray_distance_m = torch.full_like(
+            self._min_ray_distance_m,
+            self.cfg.ray_sensor_settings.max_range_m,
+        )
+        self._episode_saturated_action_components = torch.zeros(
+            self.num_envs,
+            dtype=torch.long,
+            device=self.device,
+        )
+        self._episode_action_components = torch.zeros_like(self._episode_saturated_action_components)
+        self._episode_collision_step = torch.full_like(self._episode_saturated_action_components, -1)
+        self._completed_episode_diagnostics = {
+            "success": torch.zeros(self.num_envs, dtype=torch.bool, device=self.device),
+            "collision": torch.zeros(self.num_envs, dtype=torch.bool, device=self.device),
+            "final_goal_distance_m": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+            "closest_goal_distance_m": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+            "speed_at_closest_goal_mps": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+            "min_ray_distance_m": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+            "saturated_action_components": torch.zeros(
+                self.num_envs,
+                dtype=torch.long,
+                device=self.device,
+            ),
+            "action_components": torch.zeros(self.num_envs, dtype=torch.long, device=self.device),
+            "collision_step": torch.full(
+                (self.num_envs,),
+                -1,
+                dtype=torch.long,
+                device=self.device,
+            ),
+        }
+        self._completed_episode_reward_sums = {
+            key: torch.zeros_like(value) for key, value in self._episode_sums.items()
+        }
+        self._layout_seed_by_env = torch.tensor(
+            [self._layout_seed_for_env(env_index) for env_index in range(self.num_envs)],
+            dtype=torch.long,
+            device=self.device,
+        )
 
         self._prop_body_ids = self._robot.find_bodies("m.*_prop")[0]
         self._robot_mass = self._robot.root_physx_view.get_masses()[0].sum()
@@ -113,6 +163,23 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         if "/env_0/" in root:
             return root.replace("/env_0/", f"/env_{env_index}/", 1)
         return f"/World/envs/env_{env_index}/Warehouse"
+
+    def get_completed_episode_diagnostics(self, env_ids: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Return snapshots captured immediately before the selected environments reset."""
+        diagnostics = {
+            "layout_seed": self._layout_seed_by_env[env_ids].clone(),
+            **{
+                key: value[env_ids].clone()
+                for key, value in self._completed_episode_diagnostics.items()
+            },
+        }
+        diagnostics.update(
+            {
+                f"reward/{key}": value[env_ids].clone()
+                for key, value in self._completed_episode_reward_sums.items()
+            }
+        )
+        return diagnostics
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         self._previous_actions = self._actions.clone()
@@ -196,6 +263,27 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         self._collision = self._min_ray_distance_m <= self.cfg.collision_distance_m
         self._reached_goal = goal_distance <= self.cfg.goal_radius_m
 
+        root_speed = torch.linalg.norm(self._robot.data.root_lin_vel_w, dim=1)
+        closer_to_goal = goal_distance < self._episode_closest_goal_distance_m
+        self._episode_closest_goal_distance_m = torch.minimum(
+            self._episode_closest_goal_distance_m,
+            goal_distance,
+        )
+        self._episode_speed_at_closest_goal_mps = torch.where(
+            closer_to_goal,
+            root_speed,
+            self._episode_speed_at_closest_goal_mps,
+        )
+        self._episode_min_ray_distance_m = torch.minimum(
+            self._episode_min_ray_distance_m,
+            self._min_ray_distance_m,
+        )
+        self._episode_saturated_action_components += torch.count_nonzero(
+            torch.abs(self._actions) >= 1.0,
+            dim=1,
+        )
+        self._episode_action_components += self._actions.shape[1]
+
         tilt_error = torch.linalg.norm(self._robot.data.projected_gravity_b[:, :2], dim=1)
         angular_speed = torch.linalg.norm(self._robot.data.root_ang_vel_b, dim=1)
         instability = tilt_error + 0.1 * angular_speed
@@ -228,6 +316,8 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         ray_distances_m = self._get_ray_distances_m()
         self._min_ray_distance_m = ray_distances_m.min(dim=1).values
         self._collision = self._min_ray_distance_m <= self.cfg.collision_distance_m
+        first_collision = torch.logical_and(self._collision, self._episode_collision_step < 0)
+        self._episode_collision_step[first_collision] = self.episode_length_buf[first_collision]
         goal_distance = torch.linalg.norm(self._desired_pos_w - self._robot.data.root_pos_w, dim=1)
         self._goal_distance = goal_distance.detach()
         self._reached_goal = goal_distance <= self.cfg.goal_radius_m
@@ -237,6 +327,22 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         if env_ids is None:
             env_ids = self._robot._ALL_INDICES
         if hasattr(self, "_episode_sums"):
+            if hasattr(self, "_completed_episode_diagnostics"):
+                completed_values = {
+                    "success": self._reached_goal,
+                    "collision": self._collision,
+                    "final_goal_distance_m": self._goal_distance,
+                    "closest_goal_distance_m": self._episode_closest_goal_distance_m,
+                    "speed_at_closest_goal_mps": self._episode_speed_at_closest_goal_mps,
+                    "min_ray_distance_m": self._episode_min_ray_distance_m,
+                    "saturated_action_components": self._episode_saturated_action_components,
+                    "action_components": self._episode_action_components,
+                    "collision_step": self._episode_collision_step,
+                }
+                for key, value in completed_values.items():
+                    self._completed_episode_diagnostics[key][env_ids] = value[env_ids]
+                for key, value in self._episode_sums.items():
+                    self._completed_episode_reward_sums[key][env_ids] = value[env_ids]
             extras = {
                 f"Episode_Reward/{key}": torch.mean(value[env_ids]).item()
                 for key, value in self._episode_sums.items()
@@ -246,7 +352,7 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
                     "Episode_Termination/collision": torch.count_nonzero(self._collision[env_ids]).item(),
                     "Episode_Termination/success": torch.count_nonzero(self._reached_goal[env_ids]).item(),
                     "Metrics/final_goal_distance": torch.mean(self._goal_distance[env_ids]).item(),
-                    "Metrics/min_ray_distance_m": torch.mean(self._min_ray_distance_m[env_ids]).item(),
+                    "Metrics/min_ray_distance_m": torch.mean(self._episode_min_ray_distance_m[env_ids]).item(),
                 }
             )
             self.extras["log"] = extras
@@ -298,6 +404,12 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         self._min_ray_distance_m[env_ids] = self.cfg.ray_sensor_settings.max_range_m
         self._reached_goal[env_ids] = False
         self._collision[env_ids] = False
+        self._episode_closest_goal_distance_m[env_ids] = self._goal_distance[env_ids]
+        self._episode_speed_at_closest_goal_mps[env_ids] = 0.0
+        self._episode_min_ray_distance_m[env_ids] = self.cfg.ray_sensor_settings.max_range_m
+        self._episode_saturated_action_components[env_ids] = 0
+        self._episode_action_components[env_ids] = 0
+        self._episode_collision_step[env_ids] = -1
 
     def _make_raycaster_cfg(self) -> MultiMeshRayCasterCfg:
         sensor_settings = self.cfg.ray_sensor_settings

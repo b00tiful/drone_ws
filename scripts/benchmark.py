@@ -196,7 +196,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
     forward_speed_sum = 0.0
     vertical_speed_sum = 0.0
     final_goal_distance_sum = 0.0
+    closest_goal_distance_sum = 0.0
+    speed_at_closest_goal_sum = 0.0
     min_ray_distance_sum = 0.0
+    saturated_action_components = 0
+    action_components = 0
+    collision_steps: list[int] = []
+    reward_term_sums: dict[str, float] = {}
+    layout_results: dict[int, dict[str, float]] = {}
     speed_samples = 0
     steps = 0
 
@@ -223,21 +230,113 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
             vertical_speed_sum += float(torch.abs(root_velocity_w[:, 2]).sum().detach().cpu())
             speed_samples += int(root_speed.numel())
 
-            terminated_count = int(torch.count_nonzero(terminated).detach().cpu())
-            truncated_count = int(torch.count_nonzero(truncated).detach().cpu())
-            if terminated_count or truncated_count:
-                log = raw_env.unwrapped.extras.get("log", {})
-                step_successes = int(log.get("Episode_Termination/success", 0))
-                step_collisions = int(log.get("Episode_Termination/collision", 0))
-                step_completed = terminated_count + truncated_count
+            terminated_flat = terminated.reshape(-1)
+            truncated_flat = truncated.reshape(-1)
+            done = torch.logical_or(terminated_flat, truncated_flat)
+            done_env_ids = torch.nonzero(done, as_tuple=False).flatten()
+            if done_env_ids.numel() > 0:
+                diagnostics = raw_env.unwrapped.get_completed_episode_diagnostics(done_env_ids)
+                for diagnostic_index, env_id_tensor in enumerate(done_env_ids):
+                    if completed >= args_cli.episodes:
+                        break
 
-                successes += step_successes
-                collisions += step_collisions
-                timeouts += truncated_count
-                other_terminations += max(0, terminated_count - step_successes - step_collisions)
-                final_goal_distance_sum += float(log.get("Metrics/final_goal_distance", 0.0)) * step_completed
-                min_ray_distance_sum += float(log.get("Metrics/min_ray_distance_m", 0.0)) * step_completed
-                completed += step_completed
+                    env_id = int(env_id_tensor.detach().cpu())
+                    success = bool(diagnostics["success"][diagnostic_index].detach().cpu())
+                    collision = bool(diagnostics["collision"][diagnostic_index].detach().cpu())
+                    timeout = bool(truncated_flat[env_id].detach().cpu())
+                    other_termination = bool(terminated_flat[env_id].detach().cpu()) and not success and not collision
+                    layout_seed = int(diagnostics["layout_seed"][diagnostic_index].detach().cpu())
+                    final_goal_distance = float(
+                        diagnostics["final_goal_distance_m"][diagnostic_index].detach().cpu()
+                    )
+                    closest_goal_distance = float(
+                        diagnostics["closest_goal_distance_m"][diagnostic_index].detach().cpu()
+                    )
+                    speed_at_closest_goal = float(
+                        diagnostics["speed_at_closest_goal_mps"][diagnostic_index].detach().cpu()
+                    )
+                    min_ray_distance = float(
+                        diagnostics["min_ray_distance_m"][diagnostic_index].detach().cpu()
+                    )
+                    episode_saturated_actions = int(
+                        diagnostics["saturated_action_components"][diagnostic_index].detach().cpu()
+                    )
+                    episode_action_components = int(
+                        diagnostics["action_components"][diagnostic_index].detach().cpu()
+                    )
+                    collision_step = int(diagnostics["collision_step"][diagnostic_index].detach().cpu())
+                    action_saturation_ratio = episode_saturated_actions / max(episode_action_components, 1)
+                    episode_reward_sums = {
+                        key.removeprefix("reward/"): float(value[diagnostic_index].detach().cpu())
+                        for key, value in diagnostics.items()
+                        if key.startswith("reward/")
+                    }
+
+                    completed += 1
+                    successes += int(success)
+                    collisions += int(collision)
+                    timeouts += int(timeout)
+                    other_terminations += int(other_termination)
+                    final_goal_distance_sum += final_goal_distance
+                    closest_goal_distance_sum += closest_goal_distance
+                    speed_at_closest_goal_sum += speed_at_closest_goal
+                    min_ray_distance_sum += min_ray_distance
+                    saturated_action_components += episode_saturated_actions
+                    action_components += episode_action_components
+                    if collision_step >= 0:
+                        collision_steps.append(collision_step)
+                    for key, value in episode_reward_sums.items():
+                        reward_term_sums[key] = reward_term_sums.get(key, 0.0) + value
+
+                    layout_result = layout_results.setdefault(
+                        layout_seed,
+                        {
+                            "episodes": 0.0,
+                            "successes": 0.0,
+                            "collisions": 0.0,
+                            "timeouts": 0.0,
+                            "other_terminations": 0.0,
+                            "closest_goal_distance_sum": 0.0,
+                            "speed_at_closest_goal_sum": 0.0,
+                            "saturated_action_components": 0.0,
+                            "action_components": 0.0,
+                        },
+                    )
+                    layout_result["episodes"] += 1.0
+                    layout_result["successes"] += float(success)
+                    layout_result["collisions"] += float(collision)
+                    layout_result["timeouts"] += float(timeout)
+                    layout_result["other_terminations"] += float(other_termination)
+                    layout_result["closest_goal_distance_sum"] += closest_goal_distance
+                    layout_result["speed_at_closest_goal_sum"] += speed_at_closest_goal
+                    layout_result["saturated_action_components"] += episode_saturated_actions
+                    layout_result["action_components"] += episode_action_components
+
+                    outcomes = [
+                        name
+                        for name, active in (
+                            ("success", success),
+                            ("collision", collision),
+                            ("timeout", timeout),
+                            ("other", other_termination),
+                        )
+                        if active
+                    ]
+                    reward_text = ",".join(
+                        f"{key}={value:.3f}" for key, value in episode_reward_sums.items()
+                    )
+                    collision_step_text = str(collision_step) if collision_step >= 0 else "none"
+                    print(
+                        f"[DIAGNOSTIC]: episode={completed} env={env_id} layout_seed={layout_seed} "
+                        f"outcome={'+'.join(outcomes) or 'unknown'} "
+                        f"final_goal_distance_m={final_goal_distance:.3f} "
+                        f"closest_goal_distance_m={closest_goal_distance:.3f} "
+                        f"speed_at_closest_goal_mps={speed_at_closest_goal:.3f} "
+                        f"min_ray_distance_m={min_ray_distance:.3f} "
+                        f"action_saturation_ratio={action_saturation_ratio:.6f} "
+                        f"collision_step={collision_step_text} reward_sums=[{reward_text}]",
+                        flush=True,
+                    )
 
         if completed == 0:
             raise RuntimeError("No episodes completed before max_steps; increase --max_steps or lower --episodes")
@@ -249,7 +348,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
         mean_forward_speed = forward_speed_sum / max(speed_samples, 1)
         mean_vertical_speed = vertical_speed_sum / max(speed_samples, 1)
         mean_final_goal_distance = final_goal_distance_sum / completed
+        mean_closest_goal_distance = closest_goal_distance_sum / completed
+        mean_speed_at_closest_goal = speed_at_closest_goal_sum / completed
         mean_min_ray_distance = min_ray_distance_sum / completed
+        action_saturation_ratio = saturated_action_components / max(action_components, 1)
         mean_reward_per_env_step = reward_sum / max(steps * raw_env.unwrapped.num_envs, 1)
 
         print("[INFO]: AeroStrike benchmark complete.", flush=True)
@@ -270,7 +372,41 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
         print(f"[INFO]: Mean forward speed m/s: {mean_forward_speed:.3f}", flush=True)
         print(f"[INFO]: Mean vertical speed m/s: {mean_vertical_speed:.3f}", flush=True)
         print(f"[INFO]: Mean final goal distance m: {mean_final_goal_distance:.3f}", flush=True)
+        print(f"[INFO]: Mean closest goal distance m: {mean_closest_goal_distance:.3f}", flush=True)
+        print(f"[INFO]: Mean speed at closest goal m/s: {mean_speed_at_closest_goal:.3f}", flush=True)
         print(f"[INFO]: Mean min ray distance m: {mean_min_ray_distance:.3f}", flush=True)
+        print(f"[INFO]: Action saturation ratio: {action_saturation_ratio:.6f}", flush=True)
+        if collision_steps:
+            print(
+                f"[INFO]: Mean collision step: {sum(collision_steps) / len(collision_steps):.3f}",
+                flush=True,
+            )
+        else:
+            print("[INFO]: Mean collision step: n/a", flush=True)
+        for reward_name, total in reward_term_sums.items():
+            print(
+                f"[INFO]: Mean episode reward {reward_name}: {total / completed:.3f}",
+                flush=True,
+            )
+        for layout_seed, result in sorted(layout_results.items()):
+            layout_episodes = result["episodes"]
+            layout_action_saturation_ratio = result["saturated_action_components"] / max(
+                result["action_components"],
+                1.0,
+            )
+            print(
+                f"[INFO]: Layout seed {layout_seed}: episodes={int(layout_episodes)} "
+                f"success_rate={result['successes'] / layout_episodes:.3f} "
+                f"collision_rate={result['collisions'] / layout_episodes:.3f} "
+                f"timeout_rate={result['timeouts'] / layout_episodes:.3f} "
+                f"other_rate={result['other_terminations'] / layout_episodes:.3f} "
+                f"mean_closest_goal_distance_m="
+                f"{result['closest_goal_distance_sum'] / layout_episodes:.3f} "
+                f"mean_speed_at_closest_goal_mps="
+                f"{result['speed_at_closest_goal_sum'] / layout_episodes:.3f} "
+                f"action_saturation_ratio={layout_action_saturation_ratio:.6f}",
+                flush=True,
+            )
         print(f"[INFO]: Mean reward per env-step: {mean_reward_per_env_step:.3f}", flush=True)
 
         gate_failures: list[str] = []

@@ -54,6 +54,12 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Verify the configured proximity reward scales with forward speed.",
     )
+    parser.add_argument(
+        "--check-clearance-margin-reward",
+        action="store_true",
+        default=False,
+        help="Verify the configured clearance-margin reward at safe and violating distances.",
+    )
     AppLauncher.add_app_launcher_args(parser)
     parser.set_defaults(headless=True)
     return parser.parse_args()
@@ -143,6 +149,52 @@ def check_speed_aware_proximity(env: AeroStrikeNavigationEnv) -> None:
         env._previous_goal_distance[:] = goal_distance
 
 
+def check_clearance_margin_reward(env: AeroStrikeNavigationEnv) -> None:
+    """Compare enabled and disabled clearance-margin rewards at the same state."""
+    if env.cfg.clearance_margin_penalty_weight <= 0.0:
+        raise RuntimeError("Clearance-margin reward check requires a positive penalty weight")
+
+    goal_distance = torch.linalg.norm(
+        env._desired_pos_w - env._robot.data.root_pos_w,
+        dim=1,
+    )
+    min_ray_distance_m = env._get_ray_distances_m().min(dim=1).values
+    original_clearance_margin_m = env.cfg.clearance_margin_m
+    original_penalty_weight = env.cfg.clearance_margin_penalty_weight
+    try:
+        env.cfg.clearance_margin_m = float(min_ray_distance_m.min().detach().cpu())
+        env.cfg.clearance_margin_penalty_weight = 0.0
+        env._previous_goal_distance[:] = goal_distance
+        safe_baseline_reward = env._get_rewards().clone()
+        env.cfg.clearance_margin_penalty_weight = original_penalty_weight
+        env._previous_goal_distance[:] = goal_distance
+        safe_shaped_reward = env._get_rewards().clone()
+        torch.testing.assert_close(
+            safe_shaped_reward - safe_baseline_reward,
+            torch.zeros_like(safe_baseline_reward),
+        )
+
+        env.cfg.clearance_margin_m = float(min_ray_distance_m.max().detach().cpu()) + 0.25
+        clearance_deficit_m = (env.cfg.clearance_margin_m - min_ray_distance_m).clamp_min(0.0)
+        env.cfg.clearance_margin_penalty_weight = 0.0
+        env._previous_goal_distance[:] = goal_distance
+        violating_baseline_reward = env._get_rewards().clone()
+        env.cfg.clearance_margin_penalty_weight = original_penalty_weight
+        env._previous_goal_distance[:] = goal_distance
+        violating_shaped_reward = env._get_rewards().clone()
+        expected_delta = -original_penalty_weight * clearance_deficit_m.square() * env.step_dt
+        torch.testing.assert_close(violating_shaped_reward - violating_baseline_reward, expected_delta)
+        print(
+            "[INFO]: Clearance-margin reward delta: "
+            f"{float((violating_shaped_reward - violating_baseline_reward)[0].detach().cpu())}",
+            flush=True,
+        )
+    finally:
+        env.cfg.clearance_margin_m = original_clearance_margin_m
+        env.cfg.clearance_margin_penalty_weight = original_penalty_weight
+        env._previous_goal_distance[:] = goal_distance
+
+
 def main() -> None:
     """Create, reset, and step the navigation environment."""
     global _VALIDATION_COMPLETE
@@ -228,6 +280,8 @@ def main() -> None:
                 )
         if args_cli.check_speed_aware_proximity:
             check_speed_aware_proximity(env)
+        if args_cli.check_clearance_margin_reward:
+            check_clearance_margin_reward(env)
         _VALIDATION_COMPLETE = True
         print("[INFO]: Navigation env smoke check complete.", flush=True)
     finally:

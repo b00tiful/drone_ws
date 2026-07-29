@@ -63,6 +63,7 @@ DEFAULT_PROGRESS_WEIGHT = 8.0
 DEFAULT_FORWARD_VELOCITY_WEIGHT = 0.5
 DEFAULT_PROXIMITY_PENALTY_WEIGHT = 2.0
 DEFAULT_PROXIMITY_SPEED_SCALE = 0.0
+DEFAULT_CLEARANCE_MARGIN_PENALTY_WEIGHT = 0.0
 DEFAULT_COLLISION_PENALTY = 10.0
 DEFAULT_SUCCESS_BONUS = 20.0
 DEFAULT_GOAL_ENTRY_DISTANCE_M = DEFAULT_GOAL_RADIUS_M
@@ -113,6 +114,7 @@ class NavigationSettings:
     forward_velocity_weight: float = DEFAULT_FORWARD_VELOCITY_WEIGHT
     proximity_penalty_weight: float = DEFAULT_PROXIMITY_PENALTY_WEIGHT
     proximity_speed_scale: float = DEFAULT_PROXIMITY_SPEED_SCALE
+    clearance_margin_penalty_weight: float = DEFAULT_CLEARANCE_MARGIN_PENALTY_WEIGHT
     collision_penalty: float = DEFAULT_COLLISION_PENALTY
     success_bonus: float = DEFAULT_SUCCESS_BONUS
     goal_entry_distance_m: float = DEFAULT_GOAL_ENTRY_DISTANCE_M
@@ -208,6 +210,9 @@ def load_navigation_settings(config_path: Path | str = DEFAULT_CONFIG_PATH) -> N
         forward_velocity_weight=float(reward.get("forward_velocity_weight", DEFAULT_FORWARD_VELOCITY_WEIGHT)),
         proximity_penalty_weight=float(reward.get("proximity_penalty_weight", DEFAULT_PROXIMITY_PENALTY_WEIGHT)),
         proximity_speed_scale=float(reward.get("proximity_speed_scale", DEFAULT_PROXIMITY_SPEED_SCALE)),
+        clearance_margin_penalty_weight=float(
+            reward.get("clearance_margin_penalty_weight", DEFAULT_CLEARANCE_MARGIN_PENALTY_WEIGHT)
+        ),
         collision_penalty=float(reward.get("collision_penalty", DEFAULT_COLLISION_PENALTY)),
         success_bonus=float(reward.get("success_bonus", DEFAULT_SUCCESS_BONUS)),
         goal_entry_distance_m=float(reward.get("goal_entry_distance_m", DEFAULT_GOAL_ENTRY_DISTANCE_M)),
@@ -302,6 +307,7 @@ class AeroStrikeNavigationEnvCfg(DirectRLEnvCfg):
     forward_velocity_weight = _NAV_SETTINGS.forward_velocity_weight
     proximity_penalty_weight = _NAV_SETTINGS.proximity_penalty_weight
     proximity_speed_scale = _NAV_SETTINGS.proximity_speed_scale
+    clearance_margin_penalty_weight = _NAV_SETTINGS.clearance_margin_penalty_weight
     collision_penalty = _NAV_SETTINGS.collision_penalty
     success_bonus = _NAV_SETTINGS.success_bonus
     goal_entry_distance_m = _NAV_SETTINGS.goal_entry_distance_m
@@ -370,6 +376,7 @@ class AeroStrikeNavigationV2EnvCfg(DirectRLEnvCfg):
     forward_velocity_weight = _V2_NAV_SETTINGS.forward_velocity_weight
     proximity_penalty_weight = _V2_NAV_SETTINGS.proximity_penalty_weight
     proximity_speed_scale = _V2_NAV_SETTINGS.proximity_speed_scale
+    clearance_margin_penalty_weight = _V2_NAV_SETTINGS.clearance_margin_penalty_weight
     collision_penalty = _V2_NAV_SETTINGS.collision_penalty
     success_bonus = _V2_NAV_SETTINGS.success_bonus
     goal_entry_distance_m = _V2_NAV_SETTINGS.goal_entry_distance_m
@@ -438,6 +445,7 @@ class AeroStrikeNavigationV2SafeCaptureEnvCfg(DirectRLEnvCfg):
     forward_velocity_weight = _V2_SAFE_CAPTURE_NAV_SETTINGS.forward_velocity_weight
     proximity_penalty_weight = _V2_SAFE_CAPTURE_NAV_SETTINGS.proximity_penalty_weight
     proximity_speed_scale = _V2_SAFE_CAPTURE_NAV_SETTINGS.proximity_speed_scale
+    clearance_margin_penalty_weight = _V2_SAFE_CAPTURE_NAV_SETTINGS.clearance_margin_penalty_weight
     collision_penalty = _V2_SAFE_CAPTURE_NAV_SETTINGS.collision_penalty
     success_bonus = _V2_SAFE_CAPTURE_NAV_SETTINGS.success_bonus
     goal_entry_distance_m = _V2_SAFE_CAPTURE_NAV_SETTINGS.goal_entry_distance_m

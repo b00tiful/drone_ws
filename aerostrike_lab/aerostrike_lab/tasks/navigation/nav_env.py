@@ -56,6 +56,7 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
                 "goal_entry",
                 "forward_velocity",
                 "overspeed",
+                "clearance_margin",
                 "proximity",
                 "collision",
                 "success",
@@ -296,6 +297,7 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
 
         ray_distances_m = self._get_ray_distances_m()
         self._min_ray_distance_m = ray_distances_m.min(dim=1).values
+        clearance_deficit_m = (self.cfg.clearance_margin_m - self._min_ray_distance_m).clamp_min(0.0)
         proximity_ratio = (
             (self.cfg.proximity_distance_m - self._min_ray_distance_m) / self.cfg.proximity_distance_m
         ).clamp(0.0, 1.0)
@@ -355,6 +357,9 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
             "goal_entry": goal_entry_weight * goal_entry_progress,
             "forward_velocity": self.cfg.forward_velocity_weight * speed_score * self.step_dt,
             "overspeed": -self.cfg.overspeed_penalty_weight * overspeed.square() * self.step_dt,
+            "clearance_margin": -self.cfg.clearance_margin_penalty_weight
+            * clearance_deficit_m.square()
+            * self.step_dt,
             "proximity": -self.cfg.proximity_penalty_weight
             * proximity_ratio.square()
             * proximity_speed_multiplier

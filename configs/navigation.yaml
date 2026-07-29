@@ -55,6 +55,7 @@ reward:
   forward_velocity_weight: 0.5
   proximity_penalty_weight: 2.0
   proximity_speed_scale: 0.0
+  clearance_margin_penalty_weight: 0.0
   collision_penalty: 10.0
   success_bonus: 20.0
   goal_entry_distance_m: 0.75

@@ -199,6 +199,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
     closest_goal_distance_sum = 0.0
     speed_at_closest_goal_sum = 0.0
     min_ray_distance_sum = 0.0
+    clearance_violation_steps = 0
+    episode_steps = 0
+    worst_clearance_deficit_sum = 0.0
+    max_worst_clearance_deficit = 0.0
+    speed_at_worst_clearance_sum = 0.0
+    goal_distance_at_worst_clearance_sum = 0.0
     saturated_action_components = 0
     action_components = 0
     collision_steps: list[int] = []
@@ -258,6 +264,23 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
                     min_ray_distance = float(
                         diagnostics["min_ray_distance_m"][diagnostic_index].detach().cpu()
                     )
+                    episode_clearance_violation_steps = int(
+                        diagnostics["clearance_violation_steps"][diagnostic_index].detach().cpu()
+                    )
+                    episode_step_count = int(
+                        diagnostics["episode_steps"][diagnostic_index].detach().cpu()
+                    )
+                    worst_clearance_deficit = float(
+                        diagnostics["worst_clearance_deficit_m"][diagnostic_index].detach().cpu()
+                    )
+                    speed_at_worst_clearance = float(
+                        diagnostics["speed_at_worst_clearance_mps"][diagnostic_index].detach().cpu()
+                    )
+                    goal_distance_at_worst_clearance = float(
+                        diagnostics["goal_distance_at_worst_clearance_m"][diagnostic_index]
+                        .detach()
+                        .cpu()
+                    )
                     episode_saturated_actions = int(
                         diagnostics["saturated_action_components"][diagnostic_index].detach().cpu()
                     )
@@ -281,6 +304,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
                     closest_goal_distance_sum += closest_goal_distance
                     speed_at_closest_goal_sum += speed_at_closest_goal
                     min_ray_distance_sum += min_ray_distance
+                    clearance_violation_steps += episode_clearance_violation_steps
+                    episode_steps += episode_step_count
+                    worst_clearance_deficit_sum += worst_clearance_deficit
+                    max_worst_clearance_deficit = max(
+                        max_worst_clearance_deficit,
+                        worst_clearance_deficit,
+                    )
+                    speed_at_worst_clearance_sum += speed_at_worst_clearance
+                    goal_distance_at_worst_clearance_sum += goal_distance_at_worst_clearance
                     saturated_action_components += episode_saturated_actions
                     action_components += episode_action_components
                     if collision_step >= 0:
@@ -297,6 +329,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
                             "timeouts": 0.0,
                             "other_terminations": 0.0,
                             "min_ray_distance_sum": 0.0,
+                            "clearance_violation_steps": 0.0,
+                            "episode_steps": 0.0,
+                            "worst_clearance_deficit_sum": 0.0,
+                            "max_worst_clearance_deficit": 0.0,
+                            "speed_at_worst_clearance_sum": 0.0,
+                            "goal_distance_at_worst_clearance_sum": 0.0,
                             "closest_goal_distance_sum": 0.0,
                             "speed_at_closest_goal_sum": 0.0,
                             "saturated_action_components": 0.0,
@@ -309,6 +347,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
                     layout_result["timeouts"] += float(timeout)
                     layout_result["other_terminations"] += float(other_termination)
                     layout_result["min_ray_distance_sum"] += min_ray_distance
+                    layout_result["clearance_violation_steps"] += episode_clearance_violation_steps
+                    layout_result["episode_steps"] += episode_step_count
+                    layout_result["worst_clearance_deficit_sum"] += worst_clearance_deficit
+                    layout_result["max_worst_clearance_deficit"] = max(
+                        layout_result["max_worst_clearance_deficit"],
+                        worst_clearance_deficit,
+                    )
+                    layout_result["speed_at_worst_clearance_sum"] += speed_at_worst_clearance
+                    layout_result["goal_distance_at_worst_clearance_sum"] += (
+                        goal_distance_at_worst_clearance
+                    )
                     layout_result["closest_goal_distance_sum"] += closest_goal_distance
                     layout_result["speed_at_closest_goal_sum"] += speed_at_closest_goal
                     layout_result["saturated_action_components"] += episode_saturated_actions
@@ -328,6 +377,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
                         f"{key}={value:.3f}" for key, value in episode_reward_sums.items()
                     )
                     collision_step_text = str(collision_step) if collision_step >= 0 else "none"
+                    clearance_violation_fraction = episode_clearance_violation_steps / max(
+                        episode_step_count,
+                        1,
+                    )
+                    clearance_violation_duration_s = (
+                        episode_clearance_violation_steps * raw_env.unwrapped.step_dt
+                    )
                     print(
                         f"[DIAGNOSTIC]: episode={completed} env={env_id} layout_seed={layout_seed} "
                         f"outcome={'+'.join(outcomes) or 'unknown'} "
@@ -335,6 +391,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
                         f"closest_goal_distance_m={closest_goal_distance:.3f} "
                         f"speed_at_closest_goal_mps={speed_at_closest_goal:.3f} "
                         f"min_ray_distance_m={min_ray_distance:.3f} "
+                        f"clearance_violation_steps={episode_clearance_violation_steps} "
+                        f"clearance_violation_fraction={clearance_violation_fraction:.6f} "
+                        f"clearance_violation_duration_s={clearance_violation_duration_s:.3f} "
+                        f"worst_clearance_deficit_m={worst_clearance_deficit:.3f} "
+                        f"speed_at_worst_clearance_mps={speed_at_worst_clearance:.3f} "
+                        "goal_distance_at_worst_clearance_m="
+                        f"{goal_distance_at_worst_clearance:.3f} "
                         f"action_saturation_ratio={action_saturation_ratio:.6f} "
                         f"collision_step={collision_step_text} reward_sums=[{reward_text}]",
                         flush=True,
@@ -353,6 +416,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
         mean_closest_goal_distance = closest_goal_distance_sum / completed
         mean_speed_at_closest_goal = speed_at_closest_goal_sum / completed
         mean_min_ray_distance = min_ray_distance_sum / completed
+        clearance_violation_fraction = clearance_violation_steps / max(episode_steps, 1)
+        clearance_violation_duration_s = clearance_violation_steps * raw_env.unwrapped.step_dt
+        mean_worst_clearance_deficit = worst_clearance_deficit_sum / completed
+        mean_speed_at_worst_clearance = speed_at_worst_clearance_sum / completed
+        mean_goal_distance_at_worst_clearance = goal_distance_at_worst_clearance_sum / completed
         action_saturation_ratio = saturated_action_components / max(action_components, 1)
         mean_reward_per_env_step = reward_sum / max(steps * raw_env.unwrapped.num_envs, 1)
 
@@ -377,6 +445,37 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
         print(f"[INFO]: Mean closest goal distance m: {mean_closest_goal_distance:.3f}", flush=True)
         print(f"[INFO]: Mean speed at closest goal m/s: {mean_speed_at_closest_goal:.3f}", flush=True)
         print(f"[INFO]: Mean min ray distance m: {mean_min_ray_distance:.3f}", flush=True)
+        print(
+            f"[INFO]: Clearance margin m: {raw_env.unwrapped.cfg.clearance_margin_m:.3f}",
+            flush=True,
+        )
+        print(f"[INFO]: Clearance violation steps: {clearance_violation_steps}", flush=True)
+        print(f"[INFO]: Clearance observation steps: {episode_steps}", flush=True)
+        print(
+            f"[INFO]: Clearance violation fraction: {clearance_violation_fraction:.6f}",
+            flush=True,
+        )
+        print(
+            f"[INFO]: Clearance violation duration s: {clearance_violation_duration_s:.3f}",
+            flush=True,
+        )
+        print(
+            f"[INFO]: Mean worst clearance deficit m: {mean_worst_clearance_deficit:.3f}",
+            flush=True,
+        )
+        print(
+            f"[INFO]: Max worst clearance deficit m: {max_worst_clearance_deficit:.3f}",
+            flush=True,
+        )
+        print(
+            f"[INFO]: Mean speed at worst clearance m/s: {mean_speed_at_worst_clearance:.3f}",
+            flush=True,
+        )
+        print(
+            "[INFO]: Mean goal distance at worst clearance m: "
+            f"{mean_goal_distance_at_worst_clearance:.3f}",
+            flush=True,
+        )
         print(f"[INFO]: Action saturation ratio: {action_saturation_ratio:.6f}", flush=True)
         if collision_steps:
             print(
@@ -396,6 +495,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
                 result["action_components"],
                 1.0,
             )
+            layout_clearance_violation_fraction = result["clearance_violation_steps"] / max(
+                result["episode_steps"],
+                1.0,
+            )
             print(
                 f"[INFO]: Layout seed {layout_seed}: episodes={int(layout_episodes)} "
                 f"success_rate={result['successes'] / layout_episodes:.3f} "
@@ -404,6 +507,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict) -> Non
                 f"other_rate={result['other_terminations'] / layout_episodes:.3f} "
                 f"mean_min_ray_distance_m="
                 f"{result['min_ray_distance_sum'] / layout_episodes:.3f} "
+                f"clearance_violation_steps={int(result['clearance_violation_steps'])} "
+                f"clearance_observation_steps={int(result['episode_steps'])} "
+                f"clearance_violation_fraction={layout_clearance_violation_fraction:.6f} "
+                f"clearance_violation_duration_s="
+                f"{result['clearance_violation_steps'] * raw_env.unwrapped.step_dt:.3f} "
+                f"mean_worst_clearance_deficit_m="
+                f"{result['worst_clearance_deficit_sum'] / layout_episodes:.3f} "
+                f"max_worst_clearance_deficit_m="
+                f"{result['max_worst_clearance_deficit']:.3f} "
+                f"mean_speed_at_worst_clearance_mps="
+                f"{result['speed_at_worst_clearance_sum'] / layout_episodes:.3f} "
+                f"mean_goal_distance_at_worst_clearance_m="
+                f"{result['goal_distance_at_worst_clearance_sum'] / layout_episodes:.3f} "
                 f"mean_closest_goal_distance_m="
                 f"{result['closest_goal_distance_sum'] / layout_episodes:.3f} "
                 f"mean_speed_at_closest_goal_mps="

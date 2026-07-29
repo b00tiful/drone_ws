@@ -48,6 +48,12 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Verify the goal-direction observation matches the robot-to-goal vector.",
     )
+    parser.add_argument(
+        "--check-speed-aware-proximity",
+        action="store_true",
+        default=False,
+        help="Verify the configured proximity reward scales with forward speed.",
+    )
     AppLauncher.add_app_launcher_args(parser)
     parser.set_defaults(headless=True)
     return parser.parse_args()
@@ -82,6 +88,59 @@ from aerostrike_lab.tasks.navigation.nav_env_cfg import (
     AeroStrikeNavigationV2EnvCfg,
 )
 from isaaclab.utils.math import subtract_frame_transforms
+
+
+def check_speed_aware_proximity(env: AeroStrikeNavigationEnv) -> None:
+    """Compare shaped and baseline proximity rewards at the same simulated state."""
+    if env.cfg.proximity_speed_scale <= 0.0:
+        raise RuntimeError("Speed-aware proximity check requires a positive proximity_speed_scale")
+
+    goal_delta_w = env._desired_pos_w - env._robot.data.root_pos_w
+    goal_distance = torch.linalg.norm(goal_delta_w, dim=1)
+    goal_direction_w = goal_delta_w / goal_distance.unsqueeze(-1).clamp_min(1.0e-6)
+    forward_velocity = torch.sum(
+        env._robot.data.root_lin_vel_w * goal_direction_w,
+        dim=1,
+    ).clamp_min(0.0)
+    if bool((forward_velocity <= 0.1).any()):
+        raise RuntimeError("Speed-aware proximity check requires positive goal-aligned velocity")
+
+    original_proximity_distance_m = env.cfg.proximity_distance_m
+    original_proximity_speed_scale = env.cfg.proximity_speed_scale
+    env.cfg.proximity_distance_m = env.cfg.ray_sensor_settings.max_range_m
+    try:
+        min_ray_distance_m = env._get_ray_distances_m().min(dim=1).values
+        proximity_ratio = (
+            (env.cfg.proximity_distance_m - min_ray_distance_m) / env.cfg.proximity_distance_m
+        ).clamp(0.0, 1.0)
+        if bool((proximity_ratio <= 0.0).any()):
+            raise RuntimeError("Speed-aware proximity check requires a ray hit inside the test band")
+
+        env.cfg.proximity_speed_scale = 0.0
+        env._previous_goal_distance[:] = goal_distance
+        baseline_reward = env._get_rewards().clone()
+        env.cfg.proximity_speed_scale = original_proximity_speed_scale
+        env._previous_goal_distance[:] = goal_distance
+        shaped_reward = env._get_rewards().clone()
+
+        expected_delta = (
+            -env.cfg.proximity_penalty_weight
+            * proximity_ratio.square()
+            * original_proximity_speed_scale
+            * forward_velocity
+            / env.cfg.target_speed_mps
+            * env.step_dt
+        )
+        torch.testing.assert_close(shaped_reward - baseline_reward, expected_delta)
+        print(
+            "[INFO]: Speed-aware proximity reward delta: "
+            f"{float((shaped_reward - baseline_reward)[0].detach().cpu())}",
+            flush=True,
+        )
+    finally:
+        env.cfg.proximity_distance_m = original_proximity_distance_m
+        env.cfg.proximity_speed_scale = original_proximity_speed_scale
+        env._previous_goal_distance[:] = goal_distance
 
 
 def main() -> None:
@@ -167,6 +226,8 @@ def main() -> None:
                 raise RuntimeError(
                     f"Goal direction mismatch: max error {float(goal_direction_error.max().detach().cpu())}"
                 )
+        if args_cli.check_speed_aware_proximity:
+            check_speed_aware_proximity(env)
         _VALIDATION_COMPLETE = True
         print("[INFO]: Navigation env smoke check complete.", flush=True)
     finally:

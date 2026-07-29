@@ -53,10 +53,14 @@ termination:
   collision_distance_m: 0.45
   proximity_distance_m: 4.0
 
+diagnostics:
+  clearance_margin_m: 1.0
+
 reward:
   progress_weight: 10.0
   forward_velocity_weight: 0.8
   proximity_penalty_weight: 3.0
+  proximity_speed_scale: 0.0
   collision_penalty: 25.0
   success_bonus: 40.0
   goal_entry_distance_m: 12.0

@@ -29,6 +29,8 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
 
     def __init__(self, cfg: AeroStrikeNavigationEnvCfg, render_mode: str | None = None, **kwargs) -> None:
         super().__init__(cfg, render_mode, **kwargs)
+        if self.cfg.clearance_margin_m <= 0.0:
+            raise ValueError("clearance_margin_m must be positive")
 
         action_dim = gym.spaces.flatdim(self.single_action_space)
         self._actions = torch.zeros(self.num_envs, action_dim, device=self.device)
@@ -78,6 +80,20 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
             self._min_ray_distance_m,
             self.cfg.ray_sensor_settings.max_range_m,
         )
+        self._episode_clearance_violation_steps = torch.zeros(
+            self.num_envs,
+            dtype=torch.long,
+            device=self.device,
+        )
+        self._episode_steps = torch.zeros_like(self._episode_clearance_violation_steps)
+        self._episode_speed_at_worst_clearance_mps = torch.zeros(
+            self.num_envs,
+            dtype=torch.float,
+            device=self.device,
+        )
+        self._episode_goal_distance_at_worst_clearance_m = torch.zeros_like(
+            self._episode_speed_at_worst_clearance_mps
+        )
         self._episode_saturated_action_components = torch.zeros(
             self.num_envs,
             dtype=torch.long,
@@ -92,6 +108,27 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
             "closest_goal_distance_m": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
             "speed_at_closest_goal_mps": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
             "min_ray_distance_m": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+            "clearance_violation_steps": torch.zeros(
+                self.num_envs,
+                dtype=torch.long,
+                device=self.device,
+            ),
+            "episode_steps": torch.zeros(self.num_envs, dtype=torch.long, device=self.device),
+            "worst_clearance_deficit_m": torch.zeros(
+                self.num_envs,
+                dtype=torch.float,
+                device=self.device,
+            ),
+            "speed_at_worst_clearance_mps": torch.zeros(
+                self.num_envs,
+                dtype=torch.float,
+                device=self.device,
+            ),
+            "goal_distance_at_worst_clearance_m": torch.zeros(
+                self.num_envs,
+                dtype=torch.float,
+                device=self.device,
+            ),
             "saturated_action_components": torch.zeros(
                 self.num_envs,
                 dtype=torch.long,
@@ -262,6 +299,9 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         proximity_ratio = (
             (self.cfg.proximity_distance_m - self._min_ray_distance_m) / self.cfg.proximity_distance_m
         ).clamp(0.0, 1.0)
+        proximity_speed_multiplier = (
+            1.0 + self.cfg.proximity_speed_scale * forward_velocity / self.cfg.target_speed_mps
+        )
         self._collision = self._min_ray_distance_m <= self.cfg.collision_distance_m
         self._reached_goal = goal_distance <= self.cfg.goal_radius_m
 
@@ -276,10 +316,28 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
             root_speed,
             self._episode_speed_at_closest_goal_mps,
         )
+        closer_to_obstacle = torch.logical_or(
+            self._episode_steps == 0,
+            self._min_ray_distance_m < self._episode_min_ray_distance_m,
+        )
+        self._episode_speed_at_worst_clearance_mps = torch.where(
+            closer_to_obstacle,
+            root_speed,
+            self._episode_speed_at_worst_clearance_mps,
+        )
+        self._episode_goal_distance_at_worst_clearance_m = torch.where(
+            closer_to_obstacle,
+            goal_distance,
+            self._episode_goal_distance_at_worst_clearance_m,
+        )
         self._episode_min_ray_distance_m = torch.minimum(
             self._episode_min_ray_distance_m,
             self._min_ray_distance_m,
         )
+        self._episode_clearance_violation_steps += (
+            self._min_ray_distance_m < self.cfg.clearance_margin_m
+        ).long()
+        self._episode_steps += 1
         self._episode_saturated_action_components += torch.count_nonzero(
             torch.abs(self._actions) >= 1.0,
             dim=1,
@@ -297,7 +355,10 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
             "goal_entry": goal_entry_weight * goal_entry_progress,
             "forward_velocity": self.cfg.forward_velocity_weight * speed_score * self.step_dt,
             "overspeed": -self.cfg.overspeed_penalty_weight * overspeed.square() * self.step_dt,
-            "proximity": -self.cfg.proximity_penalty_weight * proximity_ratio.square() * self.step_dt,
+            "proximity": -self.cfg.proximity_penalty_weight
+            * proximity_ratio.square()
+            * proximity_speed_multiplier
+            * self.step_dt,
             "collision": -self.cfg.collision_penalty * self._collision.float(),
             "success": self.cfg.success_bonus * self._reached_goal.float(),
             "instability": -self.cfg.instability_penalty_weight * instability * self.step_dt,
@@ -338,6 +399,15 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
                     "closest_goal_distance_m": self._episode_closest_goal_distance_m,
                     "speed_at_closest_goal_mps": self._episode_speed_at_closest_goal_mps,
                     "min_ray_distance_m": self._episode_min_ray_distance_m,
+                    "clearance_violation_steps": self._episode_clearance_violation_steps,
+                    "episode_steps": self._episode_steps,
+                    "worst_clearance_deficit_m": (
+                        self.cfg.clearance_margin_m - self._episode_min_ray_distance_m
+                    ).clamp_min(0.0),
+                    "speed_at_worst_clearance_mps": self._episode_speed_at_worst_clearance_mps,
+                    "goal_distance_at_worst_clearance_m": (
+                        self._episode_goal_distance_at_worst_clearance_m
+                    ),
                     "saturated_action_components": self._episode_saturated_action_components,
                     "action_components": self._episode_action_components,
                     "collision_step": self._episode_collision_step,
@@ -410,6 +480,10 @@ class AeroStrikeNavigationEnv(DirectRLEnv):
         self._episode_closest_goal_distance_m[env_ids] = self._goal_distance[env_ids]
         self._episode_speed_at_closest_goal_mps[env_ids] = 0.0
         self._episode_min_ray_distance_m[env_ids] = self.cfg.ray_sensor_settings.max_range_m
+        self._episode_clearance_violation_steps[env_ids] = 0
+        self._episode_steps[env_ids] = 0
+        self._episode_speed_at_worst_clearance_mps[env_ids] = 0.0
+        self._episode_goal_distance_at_worst_clearance_m[env_ids] = self._goal_distance[env_ids]
         self._episode_saturated_action_components[env_ids] = 0
         self._episode_action_components[env_ids] = 0
         self._episode_collision_step[env_ids] = -1
